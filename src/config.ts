@@ -61,6 +61,7 @@ export function loadConfig(): Config {
     namecheap: {
       apiKey: env.NAMECHEAP_API_KEY,
       apiUser: env.NAMECHEAP_API_USER,
+      clientIp: env.NAMECHEAP_CLIENT_IP,
       enabled: hasNamecheap,
     },
     logLevel: (env.LOG_LEVEL as Config['logLevel']) || 'info',

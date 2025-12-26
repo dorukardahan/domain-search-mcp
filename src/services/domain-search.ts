@@ -31,6 +31,13 @@ import { domainCache, domainCacheKey, getOrCompute } from '../utils/cache.js';
 import { porkbunAdapter, namecheapAdapter } from '../registrars/index.js';
 import { checkRdap, isRdapAvailable } from '../fallbacks/rdap.js';
 import { checkWhois, isWhoisAvailable } from '../fallbacks/whois.js';
+import {
+  generatePremiumInsight,
+  generatePremiumSummary,
+  calculateDomainScore,
+  analyzePremiumReason,
+  suggestPremiumAlternatives,
+} from '../utils/premium-analyzer.js';
 
 /**
  * Search for domain availability across multiple TLDs.
@@ -137,6 +144,17 @@ async function searchSingleDomain(
     try {
       const result = await trySource(domain, tld, source);
       if (result) {
+        // Calculate quality score
+        result.score = calculateDomainScore(result);
+
+        // Enhance premium_reason with analysis
+        if (result.premium && !result.premium_reason) {
+          const reasons = analyzePremiumReason(result.domain);
+          result.premium_reason = reasons.length > 0
+            ? reasons.join(', ')
+            : 'Premium domain';
+        }
+
         // Cache the result
         const cacheKey = domainCacheKey(fullDomain, source);
         domainCache.set(cacheKey, result);
@@ -276,12 +294,20 @@ function generateInsights(
     }
   }
 
-  // Premium warning
-  const premiums = results.filter((r) => r.premium);
+  // Premium insights (enhanced with analyzer)
+  const premiums = results.filter((r) => r.premium && r.available);
   if (premiums.length > 0) {
-    insights.push(
-      `⚠️ ${premiums.length} premium domain${premiums.length > 1 ? 's' : ''} with higher pricing`,
-    );
+    // Add detailed insight for each premium domain
+    for (const premium of premiums) {
+      const premiumInsight = generatePremiumInsight(premium);
+      if (premiumInsight) {
+        insights.push(premiumInsight);
+      }
+    }
+
+    // Add summary insights (alternatives, pricing context)
+    const summaryInsights = generatePremiumSummary(results);
+    insights.push(...summaryInsights);
   }
 
   // Privacy insight
@@ -292,6 +318,29 @@ function generateInsights(
     insights.push(
       `🔒 ${withPrivacy.length} option${withPrivacy.length > 1 ? 's' : ''} include free WHOIS privacy`,
     );
+  }
+
+  // Expiration insights for taken domains
+  const takenWithExpiration = results.filter(
+    (r) => !r.available && r.expires_at && r.days_until_expiration !== undefined,
+  );
+
+  for (const domain of takenWithExpiration) {
+    if (domain.days_until_expiration !== undefined) {
+      if (domain.days_until_expiration <= 0) {
+        insights.push(
+          `🕐 ${domain.domain} has EXPIRED — may become available soon!`,
+        );
+      } else if (domain.days_until_expiration <= 30) {
+        insights.push(
+          `🕐 ${domain.domain} expires in ${domain.days_until_expiration} days — watch for availability`,
+        );
+      } else if (domain.days_until_expiration <= 90) {
+        insights.push(
+          `📅 ${domain.domain} expires in ${Math.round(domain.days_until_expiration / 30)} months`,
+        );
+      }
+    }
   }
 
   // Error summary
@@ -326,6 +375,8 @@ function generateNextSteps(results: DomainResult[]): string[] {
   const nextSteps: string[] = [];
   const available = results.filter((r) => r.available);
   const taken = results.filter((r) => !r.available);
+  const premiumAvailable = available.filter((r) => r.premium);
+  const nonPremiumAvailable = available.filter((r) => !r.premium);
 
   if (available.length > 0) {
     // Check other TLDs
@@ -339,13 +390,25 @@ function generateNextSteps(results: DomainResult[]): string[] {
       );
     }
 
+    // Premium-specific advice
+    if (premiumAvailable.length > 0 && nonPremiumAvailable.length === 0) {
+      // All available domains are premium
+      const firstPremium = premiumAvailable[0]!;
+      const alternatives = suggestPremiumAlternatives(firstPremium.domain);
+      if (alternatives.length > 0) {
+        nextSteps.push(
+          `Consider alternatives to avoid premium pricing: ${alternatives.join(', ')}`,
+        );
+      }
+    }
+
     // Compare registrars
     if (available.length === 1 && !available[0]!.price_first_year) {
       nextSteps.push('Compare prices across registrars for better deals');
     }
 
     // Check social handles
-    nextSteps.push('Check social handle availability (GitHub, X, Instagram)');
+    nextSteps.push('Check social handle availability (GitHub, X, npm)');
   }
 
   if (taken.length > 0 && available.length === 0) {
@@ -354,10 +417,22 @@ function generateNextSteps(results: DomainResult[]): string[] {
   }
 
   if (available.length > 0) {
-    const best = available[0]!;
-    nextSteps.push(
-      `Register ${best.domain} at ${best.registrar} to secure it`,
-    );
+    // Prefer non-premium for registration suggestion
+    const best = nonPremiumAvailable.length > 0
+      ? nonPremiumAvailable.reduce((a, b) =>
+          (a.price_first_year || Infinity) < (b.price_first_year || Infinity) ? a : b
+        )
+      : available[0]!;
+
+    if (best.premium && best.price_first_year && best.price_first_year > 100) {
+      nextSteps.push(
+        `${best.domain} is premium ($${best.price_first_year}) — consider if it fits your budget`,
+      );
+    } else {
+      nextSteps.push(
+        `Register ${best.domain} at ${best.registrar} to secure it`,
+      );
+    }
   }
 
   return nextSteps;

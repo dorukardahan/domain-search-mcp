@@ -6,6 +6,7 @@
  */
 
 import axios, { type AxiosInstance, type AxiosError } from 'axios';
+import { z } from 'zod';
 import { RegistrarAdapter } from './base.js';
 import type { DomainResult, TLDInfo } from '../types.js';
 import { config } from '../config.js';
@@ -18,40 +19,58 @@ import {
 
 const PORKBUN_API_BASE = 'https://api.porkbun.com/api/json/v3';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Zod Schemas for API Response Validation
+// SECURITY: Validate all external API responses to prevent unexpected data
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
- * Porkbun API response types.
+ * Base response schema - all Porkbun responses have this structure.
  */
-interface PorkbunBaseResponse {
-  status: 'SUCCESS' | 'ERROR';
-  message?: string;
-}
+const PorkbunBaseResponseSchema = z.object({
+  status: z.enum(['SUCCESS', 'ERROR']),
+  message: z.string().optional(),
+});
 
-interface PorkbunPricingResponse extends PorkbunBaseResponse {
-  pricing?: Record<
-    string,
-    {
-      registration: string;
-      renewal: string;
-      transfer: string;
-      coupons?: {
-        registration?: {
-          code: string;
-          max_per_user: number;
-          first_year_only: string;
-          type: string;
-          amount: number;
-        };
-      };
-    }
-  >;
-}
+/**
+ * Domain availability check response schema.
+ */
+const PorkbunCheckResponseSchema = PorkbunBaseResponseSchema.extend({
+  avail: z.number().optional(),  // 1 = available, 0 = taken
+  premium: z.number().optional(), // 1 = premium
+  yourPrice: z.string().optional(),
+  retailPrice: z.string().optional(),
+});
 
-interface PorkbunCheckResponse extends PorkbunBaseResponse {
-  avail?: number; // 1 = available, 0 = taken
-  premium?: number; // 1 = premium
-  yourPrice?: string;
-  retailPrice?: string;
-}
+/**
+ * Pricing response schema for a single TLD.
+ */
+const PorkbunTldPricingSchema = z.object({
+  registration: z.string(),
+  renewal: z.string(),
+  transfer: z.string(),
+  coupons: z.object({
+    registration: z.object({
+      code: z.string(),
+      max_per_user: z.number(),
+      first_year_only: z.string(),
+      type: z.string(),
+      amount: z.number(),
+    }).optional(),
+  }).optional(),
+});
+
+/**
+ * Full pricing response schema.
+ */
+const PorkbunPricingResponseSchema = PorkbunBaseResponseSchema.extend({
+  pricing: z.record(z.string(), PorkbunTldPricingSchema).optional(),
+});
+
+// Type inference from schemas
+type PorkbunBaseResponse = z.infer<typeof PorkbunBaseResponseSchema>;
+type PorkbunCheckResponse = z.infer<typeof PorkbunCheckResponseSchema>;
+type PorkbunPricingResponse = z.infer<typeof PorkbunPricingResponseSchema>;
 
 /**
  * Porkbun adapter implementation.
@@ -127,13 +146,14 @@ export class PorkbunAdapter extends RegistrarAdapter {
 
   /**
    * Check domain availability.
+   * SECURITY: Validates API response with Zod schema.
    */
   private async checkAvailability(
     domain: string,
     tld: string,
   ): Promise<{ available: boolean; premium: boolean; price?: number }> {
     const result = await this.retryWithBackoff(async () => {
-      const response = await this.client.post<PorkbunCheckResponse>(
+      const response = await this.client.post(
         '/domain/check',
         {
           apikey: this.apiKey,
@@ -142,14 +162,29 @@ export class PorkbunAdapter extends RegistrarAdapter {
         },
       );
 
-      if (response.data.status !== 'SUCCESS') {
+      // Validate response with Zod schema
+      const parseResult = PorkbunCheckResponseSchema.safeParse(response.data);
+      if (!parseResult.success) {
+        logger.warn('Porkbun API response validation failed', {
+          domain: `${domain}.${tld}`,
+          errors: parseResult.error.errors,
+        });
         throw new RegistrarApiError(
           this.name,
-          response.data.message || 'Unknown error',
+          'Invalid API response format',
         );
       }
 
-      return response.data;
+      const validated = parseResult.data;
+
+      if (validated.status !== 'SUCCESS') {
+        throw new RegistrarApiError(
+          this.name,
+          validated.message || 'Unknown error',
+        );
+      }
+
+      return validated;
     }, `check ${domain}.${tld}`);
 
     return {
@@ -161,6 +196,7 @@ export class PorkbunAdapter extends RegistrarAdapter {
 
   /**
    * Get pricing for a TLD.
+   * SECURITY: Validates API response with Zod schema.
    */
   private async getPricing(
     tld: string,
@@ -172,7 +208,7 @@ export class PorkbunAdapter extends RegistrarAdapter {
 
     try {
       const result = await this.retryWithBackoff(async () => {
-        const response = await this.client.post<PorkbunPricingResponse>(
+        const response = await this.client.post(
           '/pricing/get',
           {
             apikey: this.apiKey,
@@ -180,14 +216,28 @@ export class PorkbunAdapter extends RegistrarAdapter {
           },
         );
 
-        if (response.data.status !== 'SUCCESS') {
+        // Validate response with Zod schema
+        const parseResult = PorkbunPricingResponseSchema.safeParse(response.data);
+        if (!parseResult.success) {
+          logger.warn('Porkbun pricing API response validation failed', {
+            errors: parseResult.error.errors,
+          });
           throw new RegistrarApiError(
             this.name,
-            response.data.message || 'Failed to get pricing',
+            'Invalid pricing API response format',
           );
         }
 
-        return response.data.pricing;
+        const validated = parseResult.data;
+
+        if (validated.status !== 'SUCCESS') {
+          throw new RegistrarApiError(
+            this.name,
+            validated.message || 'Failed to get pricing',
+          );
+        }
+
+        return validated.pricing;
       }, 'get pricing');
 
       if (result) {

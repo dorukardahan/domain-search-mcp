@@ -55,6 +55,15 @@ export interface DomainResult {
 
   /** Quality score 0-10 (factors: price, privacy, renewal) */
   score?: number;
+
+  /** Domain registration date (ISO 8601) - for taken domains */
+  registered_at?: string;
+
+  /** Domain expiration date (ISO 8601) - for taken domains */
+  expires_at?: string;
+
+  /** Days until expiration (calculated) */
+  days_until_expiration?: number;
 }
 
 /**
@@ -139,7 +148,12 @@ export type SocialPlatform =
   | 'twitter'
   | 'instagram'
   | 'linkedin'
-  | 'tiktok';
+  | 'tiktok'
+  | 'reddit'
+  | 'youtube'
+  | 'npm'
+  | 'pypi'
+  | 'producthunt';
 
 /**
  * Result of checking a social handle.
@@ -195,6 +209,7 @@ export interface Config {
   namecheap: {
     apiKey?: string;
     apiUser?: string;
+    clientIp?: string;
     enabled: boolean;
   };
 

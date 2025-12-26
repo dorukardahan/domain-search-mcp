@@ -12,18 +12,30 @@ interface CacheEntry<T> {
   value: T;
   expiresAt: number;
   createdAt: number;
+  lastAccessedAt: number;
 }
 
 /**
- * Generic TTL cache with automatic expiration.
+ * Default maximum cache size to prevent memory exhaustion.
+ * With ~1KB per entry average, 10000 entries ≈ 10MB max.
+ */
+const DEFAULT_MAX_CACHE_SIZE = 10000;
+
+/**
+ * Generic TTL cache with automatic expiration and size limits.
+ *
+ * SECURITY: Implements max size to prevent memory DoS attacks.
+ * When at capacity, evicts least-recently-used (LRU) entries.
  */
 export class TtlCache<T> {
   private cache = new Map<string, CacheEntry<T>>();
   private readonly defaultTtlMs: number;
+  private readonly maxSize: number;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(defaultTtlSeconds: number = 300) {
+  constructor(defaultTtlSeconds: number = 300, maxSize: number = DEFAULT_MAX_CACHE_SIZE) {
     this.defaultTtlMs = defaultTtlSeconds * 1000;
+    this.maxSize = maxSize;
 
     // Clean up expired entries every minute
     this.cleanupInterval = setInterval(() => this.cleanup(), 60000);
@@ -31,6 +43,7 @@ export class TtlCache<T> {
 
   /**
    * Get a value from cache if it exists and hasn't expired.
+   * Updates lastAccessedAt for LRU tracking.
    */
   get(key: string): T | undefined {
     const entry = this.cache.get(key);
@@ -39,33 +52,78 @@ export class TtlCache<T> {
       return undefined;
     }
 
+    const now = Date.now();
+
     // Check if expired
-    if (Date.now() > entry.expiresAt) {
+    if (now > entry.expiresAt) {
       this.cache.delete(key);
       return undefined;
     }
 
-    logger.debug('Cache hit', { key, age_ms: Date.now() - entry.createdAt });
+    // Update last accessed time for LRU
+    entry.lastAccessedAt = now;
+
+    logger.debug('Cache hit', { key, age_ms: now - entry.createdAt });
     return entry.value;
   }
 
   /**
    * Set a value in cache with optional custom TTL.
+   * Implements LRU eviction when cache is at capacity.
    */
   set(key: string, value: T, ttlMs?: number): void {
     const now = Date.now();
     const expiresAt = now + (ttlMs ?? this.defaultTtlMs);
 
+    // If key already exists, just update it
+    if (this.cache.has(key)) {
+      this.cache.set(key, {
+        value,
+        expiresAt,
+        createdAt: now,
+        lastAccessedAt: now,
+      });
+      return;
+    }
+
+    // If at capacity, evict least recently used entries
+    if (this.cache.size >= this.maxSize) {
+      this.evictLRU();
+    }
+
     this.cache.set(key, {
       value,
       expiresAt,
       createdAt: now,
+      lastAccessedAt: now,
     });
 
     logger.debug('Cache set', {
       key,
       ttl_ms: expiresAt - now,
+      size: this.cache.size,
     });
+  }
+
+  /**
+   * Evict least recently used entry.
+   * Called when cache is at capacity.
+   */
+  private evictLRU(): void {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+
+    for (const [key, entry] of this.cache) {
+      if (entry.lastAccessedAt < oldestTime) {
+        oldestTime = entry.lastAccessedAt;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      this.cache.delete(oldestKey);
+      logger.debug('Cache LRU eviction', { evicted_key: oldestKey });
+    }
   }
 
   /**

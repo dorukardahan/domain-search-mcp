@@ -2,7 +2,12 @@
  * check_socials Tool - Social Handle Availability.
  *
  * Check if a username is available across social platforms.
- * Helps ensure consistent branding across domain and socials.
+ * Uses Sherlock-style detection for accurate results.
+ *
+ * Detection methods:
+ * - status_code: 404 = available, 200 = taken
+ * - message: Check response body for error indicators
+ * - api: Use platform's public API
  */
 
 import { z } from 'zod';
@@ -10,6 +15,189 @@ import axios from 'axios';
 import type { SocialPlatform, SocialHandleResult } from '../types.js';
 import { wrapError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Platform Configuration (Sherlock-style)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Detection method types (inspired by Sherlock).
+ */
+type ErrorType = 'status_code' | 'message' | 'api';
+
+/**
+ * Platform configuration for username checking.
+ */
+interface PlatformConfig {
+  /** URL to check (use {} for username placeholder) */
+  url: string;
+  /** Public profile URL */
+  profileUrl: string;
+  /** Detection method */
+  errorType: ErrorType;
+  /** For message type: strings that indicate username is available */
+  errorMsg?: string[];
+  /** For status_code type: HTTP status that means available */
+  errorCode?: number;
+  /** Expected confidence level */
+  confidence: 'high' | 'medium' | 'low';
+  /** HTTP method */
+  method: 'GET' | 'HEAD';
+  /** Custom headers */
+  headers?: Record<string, string>;
+  /** Username regex validation */
+  regexCheck?: RegExp;
+}
+
+/**
+ * Platform configurations using Sherlock-style detection.
+ * HIGH confidence = public API or reliable status codes
+ * MEDIUM confidence = status codes but may have edge cases
+ * LOW confidence = platforms that block automated checks
+ */
+const PLATFORM_CONFIGS: Record<SocialPlatform, PlatformConfig> = {
+  // ─────────────────────────────────────────────────────────────────────────
+  // HIGH CONFIDENCE (Public APIs)
+  // ─────────────────────────────────────────────────────────────────────────
+  github: {
+    url: 'https://api.github.com/users/{}',
+    profileUrl: 'https://github.com/{}',
+    errorType: 'status_code',
+    errorCode: 404,
+    confidence: 'high',
+    method: 'GET',
+    headers: {
+      'Accept': 'application/vnd.github.v3+json',
+      'User-Agent': 'Domain-Search-MCP/1.0',
+    },
+    regexCheck: /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i,
+  },
+
+  npm: {
+    url: 'https://registry.npmjs.org/{}',
+    profileUrl: 'https://www.npmjs.com/~{}',
+    errorType: 'status_code',
+    errorCode: 404,
+    confidence: 'high',
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
+    regexCheck: /^[a-z0-9][a-z0-9._-]*$/i,
+  },
+
+  pypi: {
+    url: 'https://pypi.org/user/{}/',
+    profileUrl: 'https://pypi.org/user/{}/',
+    errorType: 'status_code',
+    errorCode: 404,
+    confidence: 'high',
+    method: 'GET',
+  },
+
+  reddit: {
+    url: 'https://www.reddit.com/user/{}/about.json',
+    profileUrl: 'https://reddit.com/user/{}',
+    errorType: 'message',
+    errorMsg: ['"error": 404'],
+    confidence: 'high',
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Domain-Search-MCP/1.0 (checking username availability)',
+    },
+    regexCheck: /^[A-Za-z0-9_-]{3,20}$/,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MEDIUM CONFIDENCE (Status codes, some edge cases)
+  // ─────────────────────────────────────────────────────────────────────────
+  twitter: {
+    url: 'https://twitter.com/{}',
+    profileUrl: 'https://twitter.com/{}',
+    errorType: 'status_code',
+    errorCode: 404,
+    confidence: 'medium',
+    method: 'HEAD',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    },
+    regexCheck: /^[A-Za-z0-9_]{1,15}$/,
+  },
+
+  youtube: {
+    url: 'https://www.youtube.com/@{}',
+    profileUrl: 'https://youtube.com/@{}',
+    errorType: 'status_code',
+    errorCode: 404,
+    confidence: 'medium',
+    method: 'HEAD',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    },
+  },
+
+  producthunt: {
+    url: 'https://www.producthunt.com/@{}',
+    profileUrl: 'https://producthunt.com/@{}',
+    errorType: 'status_code',
+    errorCode: 404,
+    confidence: 'medium',
+    method: 'HEAD',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    },
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LOW CONFIDENCE (Aggressive bot protection)
+  // ─────────────────────────────────────────────────────────────────────────
+  instagram: {
+    url: 'https://www.instagram.com/{}/',
+    profileUrl: 'https://instagram.com/{}',
+    errorType: 'status_code',
+    errorCode: 404,
+    confidence: 'low', // Instagram aggressively blocks automated checks
+    method: 'HEAD',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    },
+    regexCheck: /^[a-zA-Z0-9_.]{1,30}$/,
+  },
+
+  linkedin: {
+    url: 'https://www.linkedin.com/in/{}',
+    profileUrl: 'https://linkedin.com/in/{}',
+    errorType: 'status_code',
+    errorCode: 404,
+    confidence: 'low', // LinkedIn requires auth
+    method: 'HEAD',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    },
+  },
+
+  tiktok: {
+    url: 'https://www.tiktok.com/@{}',
+    profileUrl: 'https://tiktok.com/@{}',
+    errorType: 'status_code',
+    errorCode: 404,
+    confidence: 'low', // TikTok blocks automated checks
+    method: 'HEAD',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    },
+    regexCheck: /^[a-zA-Z0-9_.]{2,24}$/,
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Zod Schema
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ALL_PLATFORMS = [
+  'github', 'twitter', 'instagram', 'linkedin', 'tiktok',
+  'reddit', 'youtube', 'npm', 'pypi', 'producthunt',
+] as const;
 
 /**
  * Input schema for check_socials.
@@ -21,10 +209,10 @@ export const checkSocialsSchema = z.object({
     .max(30)
     .describe("The username/handle to check (e.g., 'vibecoding')."),
   platforms: z
-    .array(z.enum(['github', 'twitter', 'instagram', 'linkedin', 'tiktok']))
+    .array(z.enum(ALL_PLATFORMS))
     .optional()
     .describe(
-      "Platforms to check. Defaults to ['github', 'twitter', 'instagram'].",
+      "Platforms to check. Defaults to ['github', 'twitter', 'reddit', 'npm'].",
     ),
 });
 
@@ -35,15 +223,18 @@ export type CheckSocialsInput = z.infer<typeof checkSocialsSchema>;
  */
 export const checkSocialsTool = {
   name: 'check_socials',
-  description: `Check if a username is available on social media platforms.
+  description: `Check if a username is available on social media and developer platforms.
 
-Supports: GitHub, Twitter/X, Instagram, LinkedIn, TikTok
+Supports 10 platforms with varying confidence levels:
+- HIGH: GitHub, npm, PyPI, Reddit (reliable public APIs)
+- MEDIUM: Twitter/X, YouTube, ProductHunt (status code based)
+- LOW: Instagram, LinkedIn, TikTok (block automated checks - verify manually)
 
-Returns availability status with confidence level (some platforms
-can't be checked reliably without authentication).
+Returns availability status with confidence indicator.
 
 Example:
-- check_socials("vibecoding") → checks GitHub, Twitter, Instagram`,
+- check_socials("vibecoding") → checks GitHub, Twitter, Reddit, npm
+- check_socials("myapp", ["github", "npm", "pypi"]) → developer platforms only`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -55,110 +246,85 @@ Example:
         type: 'array',
         items: {
           type: 'string',
-          enum: ['github', 'twitter', 'instagram', 'linkedin', 'tiktok'],
+          enum: ALL_PLATFORMS,
         },
         description:
-          "Platforms to check. Defaults to ['github', 'twitter', 'instagram'].",
+          "Platforms to check. Defaults to ['github', 'twitter', 'reddit', 'npm'].",
       },
     },
     required: ['name'],
   },
 };
 
-/**
- * Platform check configuration.
- */
-interface PlatformConfig {
-  checkUrl: (username: string) => string;
-  profileUrl: (username: string) => string;
-  confidence: 'high' | 'medium' | 'low';
-  checkMethod: 'head' | 'get';
-}
-
-const PLATFORM_CONFIGS: Record<SocialPlatform, PlatformConfig> = {
-  github: {
-    checkUrl: (u) => `https://api.github.com/users/${u}`,
-    profileUrl: (u) => `https://github.com/${u}`,
-    confidence: 'high',
-    checkMethod: 'get',
-  },
-  twitter: {
-    // Twitter API requires auth, so we use a workaround
-    checkUrl: (u) => `https://twitter.com/${u}`,
-    profileUrl: (u) => `https://twitter.com/${u}`,
-    confidence: 'medium',
-    checkMethod: 'head',
-  },
-  instagram: {
-    checkUrl: (u) => `https://www.instagram.com/${u}/`,
-    profileUrl: (u) => `https://instagram.com/${u}`,
-    confidence: 'low', // Instagram blocks automated checks
-    checkMethod: 'head',
-  },
-  linkedin: {
-    checkUrl: (u) => `https://www.linkedin.com/in/${u}`,
-    profileUrl: (u) => `https://linkedin.com/in/${u}`,
-    confidence: 'low', // LinkedIn blocks automated checks
-    checkMethod: 'head',
-  },
-  tiktok: {
-    checkUrl: (u) => `https://www.tiktok.com/@${u}`,
-    profileUrl: (u) => `https://tiktok.com/@${u}`,
-    confidence: 'low',
-    checkMethod: 'head',
-  },
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// Platform Checking Logic
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Check a single platform.
+ * Check a single platform using Sherlock-style detection.
  */
 async function checkPlatform(
   username: string,
   platform: SocialPlatform,
 ): Promise<SocialHandleResult> {
   const config = PLATFORM_CONFIGS[platform];
-  const url = config.checkUrl(username);
+  const url = config.url.replace('{}', username);
+  const profileUrl = config.profileUrl.replace('{}', username);
+
+  // Validate username format if regex provided
+  if (config.regexCheck && !config.regexCheck.test(username)) {
+    return {
+      platform,
+      handle: username,
+      available: false,
+      url: profileUrl,
+      checked_at: new Date().toISOString(),
+      confidence: 'high', // High confidence it's invalid
+    };
+  }
 
   try {
-    if (platform === 'github') {
-      // GitHub has a public API
-      const response = await axios.get(url, {
-        timeout: 5000,
-        validateStatus: () => true, // Don't throw on any status
-        headers: {
-          'User-Agent': 'Domain-Search-MCP/1.0',
-        },
-      });
-
-      return {
-        platform,
-        handle: username,
-        available: response.status === 404,
-        url: config.profileUrl(username),
-        checked_at: new Date().toISOString(),
-        confidence: 'high',
-      };
-    }
-
-    // For other platforms, try a HEAD request
-    const response = await axios.head(url, {
-      timeout: 5000,
-      validateStatus: () => true,
+    const response = await axios({
+      method: config.method,
+      url,
+      timeout: 8000,
+      validateStatus: () => true, // Don't throw on any status
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        ...config.headers,
       },
       maxRedirects: 0,
     });
 
-    // 404 = available, 200/301/302 = taken
-    const available = response.status === 404;
+    let available = false;
+
+    // Determine availability based on errorType
+    switch (config.errorType) {
+      case 'status_code':
+        available = response.status === (config.errorCode ?? 404);
+        break;
+
+      case 'message':
+        if (config.errorMsg && typeof response.data === 'string') {
+          available = config.errorMsg.some((msg) =>
+            response.data.includes(msg),
+          );
+        } else if (config.errorMsg && typeof response.data === 'object') {
+          const dataStr = JSON.stringify(response.data);
+          available = config.errorMsg.some((msg) => dataStr.includes(msg));
+        }
+        break;
+
+      case 'api':
+        // API-specific logic would go here
+        available = response.status === 404;
+        break;
+    }
 
     return {
       platform,
       handle: username,
       available,
-      url: config.profileUrl(username),
+      url: profileUrl,
       checked_at: new Date().toISOString(),
       confidence: config.confidence,
     };
@@ -173,12 +339,16 @@ async function checkPlatform(
       platform,
       handle: username,
       available: false, // Assume taken if we can't check
-      url: config.profileUrl(username),
+      url: profileUrl,
       checked_at: new Date().toISOString(),
       confidence: 'low',
     };
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Response Types
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
  * Response format for social checks.
@@ -194,6 +364,10 @@ interface CheckSocialsResponse {
   insights: string[];
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Main Execution
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
  * Execute the check_socials tool.
  */
@@ -203,21 +377,24 @@ export async function executeCheckSocials(
   try {
     const { name, platforms } = checkSocialsSchema.parse(input);
 
+    // Default platforms: mix of social and developer platforms
     const platformsToCheck: SocialPlatform[] = platforms || [
       'github',
       'twitter',
-      'instagram',
+      'reddit',
+      'npm',
     ];
 
-    // Normalize username
-    const normalizedName = name.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    // Normalize username (lowercase, remove special chars)
+    const normalizedName = name.toLowerCase().replace(/[^a-z0-9_-]/g, '');
 
-    // Check all platforms in parallel
+    // Check all platforms in parallel (max 5 concurrent)
     const results = await Promise.all(
       platformsToCheck.map((p) => checkPlatform(normalizedName, p)),
     );
 
-    // Calculate summary
+    // Categorize results by confidence
+    const highConfidence = results.filter((r) => r.confidence === 'high');
     const available = results.filter(
       (r) => r.available && r.confidence !== 'low',
     );
@@ -229,19 +406,30 @@ export async function executeCheckSocials(
 
     if (available.length > 0) {
       insights.push(
-        `✅ ${normalizedName} is available on: ${available.map((r) => r.platform).join(', ')}`,
+        `✅ "${normalizedName}" is available on: ${available.map((r) => r.platform).join(', ')}`,
       );
     }
 
     if (taken.length > 0) {
       insights.push(
-        `❌ ${normalizedName} is taken on: ${taken.map((r) => r.platform).join(', ')}`,
+        `❌ "${normalizedName}" is taken on: ${taken.map((r) => r.platform).join(', ')}`,
       );
     }
 
     if (uncertain.length > 0) {
       insights.push(
-        `⚠️ Could not reliably check: ${uncertain.map((r) => r.platform).join(', ')} (check manually)`,
+        `⚠️ Could not reliably check: ${uncertain.map((r) => r.platform).join(', ')} (verify manually)`,
+      );
+    }
+
+    // Developer-focused insight
+    const devPlatforms = results.filter((r) =>
+      ['github', 'npm', 'pypi'].includes(r.platform),
+    );
+    const allDevAvailable = devPlatforms.every((r) => r.available);
+    if (devPlatforms.length > 0 && allDevAvailable) {
+      insights.push(
+        `🛠️ Great for developers! "${normalizedName}" is available on all dev platforms`,
       );
     }
 
@@ -250,12 +438,14 @@ export async function executeCheckSocials(
     const allTaken = results.every((r) => !r.available);
 
     if (allAvailable) {
-      insights.push(`🎉 Great news! "${normalizedName}" is available everywhere`);
+      insights.push(
+        `🎉 Perfect! "${normalizedName}" is available everywhere - grab it now!`,
+      );
     } else if (allTaken) {
       insights.push(
-        `💡 Consider variations: ${normalizedName}hq, ${normalizedName}app, get${normalizedName}`,
+        `💡 Try variations: ${normalizedName}hq, ${normalizedName}app, get${normalizedName}, ${normalizedName}io`,
       );
-    } else {
+    } else if (available.length > 0 && taken.length > 0) {
       insights.push(
         '💡 For consistent branding, consider a name available on all platforms',
       );

@@ -8,6 +8,7 @@
  */
 
 import axios, { type AxiosInstance, type AxiosError } from 'axios';
+import { z } from 'zod';
 import { RegistrarAdapter } from './base.js';
 import type { DomainResult, TLDInfo } from '../types.js';
 import { config } from '../config.js';
@@ -21,18 +22,78 @@ import {
 const NAMECHEAP_API_BASE = 'https://api.namecheap.com/xml.response';
 const NAMECHEAP_SANDBOX_BASE = 'https://api.sandbox.namecheap.com/xml.response';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Zod Schemas for Parsed XML Validation
+// SECURITY: Validate parsed XML data to ensure expected structure
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Schema for parsed domain check result.
+ */
+const NamecheapCheckResultSchema = z.object({
+  available: z.boolean(),
+  premium: z.boolean(),
+  price: z.number().optional(),
+  renewalPrice: z.number().optional(),
+});
+
+type NamecheapCheckResult = z.infer<typeof NamecheapCheckResultSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// XML Parsing Utilities (Internal - hardcoded tags only)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Allowed XML tags for parsing.
+ * SECURITY: Only these hardcoded tags can be parsed to prevent injection.
+ */
+const ALLOWED_XML_TAGS = new Set([
+  'Error',
+  'Errors',
+  'DomainCheckResult',
+] as const);
+
+const ALLOWED_XML_ATTRS = new Set([
+  'Count',
+  'Available',
+  'IsPremiumName',
+  'PremiumRegistrationPrice',
+  'PremiumRenewalPrice',
+] as const);
+
 /**
  * Parse XML response to extract domain info.
  * Simple regex-based parsing since we don't want xml2js dependency.
+ *
+ * SECURITY: Only parses allowed tags defined in ALLOWED_XML_TAGS.
  */
 function parseXmlValue(xml: string, tag: string): string | undefined {
-  const regex = new RegExp(`<${tag}>([^<]*)</${tag}>`, 'i');
+  if (!ALLOWED_XML_TAGS.has(tag as typeof ALLOWED_XML_TAGS extends Set<infer T> ? T : never)) {
+    logger.warn('Attempted to parse disallowed XML tag', { tag });
+    return undefined;
+  }
+  // Escape special regex chars in tag name for safety
+  const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Reason: tag parameter is validated against ALLOWED_XML_TAGS whitelist above, not user input
+  const regex = new RegExp(`<${escapedTag}>([^<]*)</${escapedTag}>`, 'i'); // nosemgrep: detect-non-literal-regexp
   const match = xml.match(regex);
   return match?.[1];
 }
 
 function parseXmlAttribute(xml: string, tag: string, attr: string): string | undefined {
-  const regex = new RegExp(`<${tag}[^>]*${attr}="([^"]*)"`, 'i');
+  if (!ALLOWED_XML_TAGS.has(tag as typeof ALLOWED_XML_TAGS extends Set<infer T> ? T : never)) {
+    logger.warn('Attempted to parse disallowed XML tag', { tag });
+    return undefined;
+  }
+  if (!ALLOWED_XML_ATTRS.has(attr as typeof ALLOWED_XML_ATTRS extends Set<infer T> ? T : never)) {
+    logger.warn('Attempted to parse disallowed XML attribute', { attr });
+    return undefined;
+  }
+  // Escape special regex chars for safety
+  const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedAttr = attr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Reason: tag/attr parameters are validated against ALLOWED_XML_TAGS/ATTRS whitelists above, not user input
+  const regex = new RegExp(`<${escapedTag}[^>]*${escapedAttr}="([^"]*)"`, 'i'); // nosemgrep: detect-non-literal-regexp
   const match = xml.match(regex);
   return match?.[1];
 }
@@ -97,7 +158,7 @@ export class NamecheapAdapter extends RegistrarAdapter {
             ApiUser: this.apiUser,
             ApiKey: this.apiKey,
             UserName: this.apiUser,
-            ClientIp: await this.getClientIp(),
+            ClientIp: this.getClientIp(),
             Command: 'namecheap.domains.check',
             DomainList: fullDomain,
           },
@@ -123,16 +184,12 @@ export class NamecheapAdapter extends RegistrarAdapter {
 
   /**
    * Parse the check response XML.
+   * SECURITY: Validates parsed result with Zod schema.
    */
   private parseCheckResponse(
     xml: string,
     domain: string,
-  ): {
-    available: boolean;
-    premium: boolean;
-    price?: number;
-    renewalPrice?: number;
-  } {
+  ): NamecheapCheckResult {
     // Check for API errors
     const errorCount = parseXmlAttribute(xml, 'Errors', 'Count');
     if (errorCount && parseInt(errorCount, 10) > 0) {
@@ -151,12 +208,27 @@ export class NamecheapAdapter extends RegistrarAdapter {
     const premiumPrice = parseXmlAttribute(xml, 'DomainCheckResult', 'PremiumRegistrationPrice');
     const premiumRenewal = parseXmlAttribute(xml, 'DomainCheckResult', 'PremiumRenewalPrice');
 
-    return {
+    const rawResult = {
       available: parseXmlBool(available),
       premium: parseXmlBool(isPremium),
       price: premiumPrice ? parseFloat(premiumPrice) : undefined,
       renewalPrice: premiumRenewal ? parseFloat(premiumRenewal) : undefined,
     };
+
+    // Validate parsed result with Zod
+    const parseResult = NamecheapCheckResultSchema.safeParse(rawResult);
+    if (!parseResult.success) {
+      logger.warn('Namecheap API response validation failed', {
+        domain,
+        errors: parseResult.error.errors,
+      });
+      throw new RegistrarApiError(
+        this.name,
+        'Invalid API response format',
+      );
+    }
+
+    return parseResult.data;
   }
 
   /**
@@ -184,17 +256,33 @@ export class NamecheapAdapter extends RegistrarAdapter {
   /**
    * Get client IP for API requests.
    * Namecheap requires this for all API calls.
+   *
+   * SECURITY: We no longer call external services (ipify.org) to get IP.
+   * The IP must be configured via NAMECHEAP_CLIENT_IP environment variable.
+   * This prevents unintended IP disclosure to third parties.
    */
-  private async getClientIp(): Promise<string> {
-    try {
-      const response = await axios.get('https://api.ipify.org?format=json', {
-        timeout: 5000,
-      });
-      return response.data.ip;
-    } catch {
-      // Fallback to localhost for local development
-      return '127.0.0.1';
+  private getClientIp(): string {
+    const clientIp = config.namecheap.clientIp;
+
+    if (!clientIp) {
+      throw new AuthenticationError(
+        'namecheap',
+        'NAMECHEAP_CLIENT_IP not configured. Add your whitelisted IP to .env file.',
+      );
     }
+
+    // Basic IP format validation (IPv4 or IPv6)
+    const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+    const ipv6Pattern = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
+
+    if (!ipv4Pattern.test(clientIp) && !ipv6Pattern.test(clientIp)) {
+      throw new AuthenticationError(
+        'namecheap',
+        `Invalid NAMECHEAP_CLIENT_IP format: "${clientIp}". Must be a valid IPv4 or IPv6 address.`,
+      );
+    }
+
+    return clientIp;
   }
 
   /**

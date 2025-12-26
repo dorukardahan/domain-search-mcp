@@ -7,9 +7,55 @@
  */
 
 import axios, { type AxiosError } from 'axios';
+import { z } from 'zod';
 import type { DomainResult } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { TimeoutError, RegistrarApiError } from '../utils/errors.js';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Zod Schemas for RDAP Response Validation (RFC 7483)
+// SECURITY: Validate RDAP responses to prevent unexpected data
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * vCard array element schema.
+ * vCard format: ["property", {}, "type", value]
+ */
+const VCardPropertySchema = z.tuple([
+  z.string(),           // property name (e.g., "fn")
+  z.record(z.unknown()), // parameters (usually empty {})
+  z.string(),           // type (e.g., "text")
+  z.union([z.string(), z.array(z.string())]), // value
+]).or(z.array(z.unknown())); // Allow flexible arrays for compatibility
+
+/**
+ * Entity schema (registrar, registrant, etc.)
+ */
+const RdapEntitySchema = z.object({
+  roles: z.array(z.string()).optional(),
+  vcardArray: z.tuple([
+    z.literal('vcard'),
+    z.array(VCardPropertySchema),
+  ]).optional(),
+}).passthrough(); // Allow additional RDAP fields
+
+/**
+ * RDAP event schema (registration, expiration, etc.)
+ */
+const RdapEventSchema = z.object({
+  eventAction: z.string(),
+  eventDate: z.string(),
+}).passthrough();
+
+/**
+ * Main RDAP domain response schema.
+ */
+const RdapDomainResponseSchema = z.object({
+  objectClassName: z.string(),
+  ldhName: z.string().optional(),
+  entities: z.array(RdapEntitySchema).optional(),
+  events: z.array(RdapEventSchema).optional(),
+}).passthrough(); // Allow additional RDAP fields
 
 /**
  * RDAP bootstrap URLs for different TLDs.
@@ -18,16 +64,69 @@ const RDAP_BOOTSTRAP = 'https://data.iana.org/rdap/dns.json';
 
 /**
  * Fallback RDAP servers for common TLDs.
+ * Expanded to include popular gTLDs and ccTLDs.
  */
 const RDAP_SERVERS: Record<string, string> = {
+  // Generic TLDs (Verisign)
   com: 'https://rdap.verisign.com/com/v1',
   net: 'https://rdap.verisign.com/net/v1',
+  cc: 'https://rdap.verisign.com/cc/v1',
+  tv: 'https://rdap.verisign.com/tv/v1',
+  name: 'https://rdap.verisign.com/name/v1',
+
+  // Generic TLDs (Other registries)
   org: 'https://rdap.publicinterestregistry.org/rdap/org',
-  io: 'https://rdap.nic.io/domain',
+  info: 'https://rdap.afilias.net/rdap/info',
+  biz: 'https://rdap.nic.biz',
+  xyz: 'https://rdap.nic.xyz',
+  club: 'https://rdap.nic.club',
+  online: 'https://rdap.nic.online',
+  site: 'https://rdap.nic.site',
+  tech: 'https://rdap.nic.tech',
+  store: 'https://rdap.nic.store',
+
+  // Google TLDs
   dev: 'https://rdap.nic.google/domain',
   app: 'https://rdap.nic.google/domain',
+  page: 'https://rdap.nic.google/domain',
+  how: 'https://rdap.nic.google/domain',
+  new: 'https://rdap.nic.google/domain',
+
+  // Country-code TLDs (ccTLDs)
+  io: 'https://rdap.nic.io/domain',
   co: 'https://rdap.nic.co/domain',
   ai: 'https://rdap.nic.ai/domain',
+  me: 'https://rdap.nic.me/domain',
+  sh: 'https://rdap.nic.sh/domain',
+  ac: 'https://rdap.nic.ac/domain',
+  gg: 'https://rdap.nic.gg/domain',
+  im: 'https://rdap.nic.im/domain',
+
+  // European ccTLDs
+  eu: 'https://rdap.eurid.eu/domain',
+  de: 'https://rdap.denic.de/domain',
+  nl: 'https://rdap.sidn.nl',
+  uk: 'https://rdap.nominet.uk/uk',
+  ch: 'https://rdap.nic.ch',
+  se: 'https://rdap.iis.se/domain',
+  fi: 'https://rdap.traficom.fi/domain',
+  cz: 'https://rdap.nic.cz',
+  pl: 'https://rdap.dns.pl',
+
+  // Other popular ccTLDs
+  ca: 'https://rdap.ca.fury.ca/rdap',
+  au: 'https://rdap.auda.org.au',
+  nz: 'https://rdap.dnc.org.nz',
+  jp: 'https://rdap.jprs.jp/rdap',
+  kr: 'https://rdap.kisa.or.kr',
+  in: 'https://rdap.registry.in',
+  br: 'https://rdap.registro.br',
+
+  // Specialty TLDs
+  crypto: 'https://rdap.nic.crypto',
+  cloud: 'https://rdap.nic.cloud',
+  design: 'https://rdap.nic.design',
+  agency: 'https://rdap.nic.agency',
 };
 
 /**
@@ -67,41 +166,107 @@ async function getRdapServer(tld: string): Promise<string | null> {
 }
 
 /**
- * Parse RDAP response to determine availability.
+ * Safely extract registrar name from vCard array.
+ * SECURITY: Validates array bounds and types before access.
  */
-function parseRdapResponse(data: unknown): {
+function extractRegistrarFromVCard(vcardArray: unknown): string | undefined {
+  try {
+    // vcardArray should be ["vcard", [...properties]]
+    if (!Array.isArray(vcardArray) || vcardArray.length < 2) {
+      return undefined;
+    }
+
+    const properties = vcardArray[1];
+    if (!Array.isArray(properties)) {
+      return undefined;
+    }
+
+    // Find the "fn" (formatted name) property
+    for (const prop of properties) {
+      if (!Array.isArray(prop) || prop.length < 4) {
+        continue;
+      }
+
+      const [propName, , , propValue] = prop;
+
+      if (propName === 'fn' && typeof propValue === 'string') {
+        return propValue;
+      }
+    }
+
+    return undefined;
+  } catch (error) {
+    logger.debug('Failed to extract registrar from vCard', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
+
+/**
+ * Parsed RDAP data including availability and registration info.
+ */
+interface RdapParsedData {
   available: boolean;
   registrar?: string;
-} {
+  registeredAt?: string;
+  expiresAt?: string;
+}
+
+/**
+ * Parse RDAP response to determine availability and extract dates.
+ * SECURITY: Validates response with Zod schema before processing.
+ */
+function parseRdapResponse(data: unknown): RdapParsedData {
   if (!data || typeof data !== 'object') {
     return { available: false };
   }
 
-  const record = data as Record<string, unknown>;
+  // Validate with Zod schema
+  const parseResult = RdapDomainResponseSchema.safeParse(data);
+  if (!parseResult.success) {
+    logger.debug('RDAP response validation failed', {
+      errors: parseResult.error.errors.slice(0, 3), // Limit logged errors
+    });
+    // Still try to extract basic info even if validation fails
+    const record = data as Record<string, unknown>;
+    if (record.objectClassName === 'domain') {
+      return { available: false };
+    }
+    return { available: false };
+  }
+
+  const validated = parseResult.data;
 
   // If we got a domain record, it's registered (not available)
-  if (record.objectClassName === 'domain') {
-    // Extract registrar info if available
-    const entities = record.entities as Array<{
-      roles?: string[];
-      vcardArray?: [string, Array<[string, object, string, string]>];
-    }> | undefined;
-
+  if (validated.objectClassName === 'domain') {
     let registrar: string | undefined;
-    if (entities) {
-      for (const entity of entities) {
+    let registeredAt: string | undefined;
+    let expiresAt: string | undefined;
+
+    // Safely extract registrar info
+    if (validated.entities) {
+      for (const entity of validated.entities) {
         if (entity.roles?.includes('registrar') && entity.vcardArray) {
-          // Extract FN (formatted name) from vCard
-          const vcard = entity.vcardArray[1];
-          const fn = vcard?.find((v) => v[0] === 'fn');
-          if (fn) {
-            registrar = fn[3] as string;
-          }
+          registrar = extractRegistrarFromVCard(entity.vcardArray);
+          if (registrar) break;
         }
       }
     }
 
-    return { available: false, registrar };
+    // Extract event dates (registration, expiration, last changed)
+    if (validated.events) {
+      for (const event of validated.events) {
+        const action = event.eventAction.toLowerCase();
+        if (action === 'registration' || action === 'created') {
+          registeredAt = event.eventDate;
+        } else if (action === 'expiration') {
+          expiresAt = event.eventDate;
+        }
+      }
+    }
+
+    return { available: false, registrar, registeredAt, expiresAt };
   }
 
   return { available: false };
@@ -142,7 +307,10 @@ export async function checkRdap(
     // 200 = domain found = not available
     if (response.status === 200) {
       const parsed = parseRdapResponse(response.data);
-      return createRdapResult(domain, tld, parsed.available);
+      return createRdapResult(domain, tld, parsed.available, {
+        registeredAt: parsed.registeredAt,
+        expiresAt: parsed.expiresAt,
+      });
     }
 
     throw new RegistrarApiError(
@@ -178,14 +346,30 @@ export async function checkRdap(
 }
 
 /**
+ * Calculate days until expiration from an ISO date string.
+ */
+function calculateDaysUntilExpiration(expiresAt: string): number | undefined {
+  try {
+    const expirationDate = new Date(expiresAt);
+    const now = new Date();
+    const diffMs = expirationDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    return diffDays;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Create a standardized result from RDAP.
  */
 function createRdapResult(
   domain: string,
   tld: string,
   available: boolean,
+  dates?: { registeredAt?: string; expiresAt?: string },
 ): DomainResult {
-  return {
+  const result: DomainResult = {
     domain: `${domain}.${tld}`,
     available,
     premium: false, // RDAP doesn't tell us about premium status
@@ -198,6 +382,18 @@ function createRdapResult(
     source: 'rdap',
     checked_at: new Date().toISOString(),
   };
+
+  // Add registration and expiration dates if available
+  if (dates?.registeredAt) {
+    result.registered_at = dates.registeredAt;
+  }
+
+  if (dates?.expiresAt) {
+    result.expires_at = dates.expiresAt;
+    result.days_until_expiration = calculateDaysUntilExpiration(dates.expiresAt);
+  }
+
+  return result;
 }
 
 /**
