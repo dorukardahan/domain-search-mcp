@@ -1,14 +1,6 @@
 {
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": ["dorukardahan"],
   "name": "Domain Search MCP",
-  "description": "Check domain availability and pricing across multiple registrars (Porkbun, Namecheap, RDAP, WHOIS) in real-time. Includes social handle checking for 10 platforms.",
-  "categories": ["search", "developer-tools"],
-  "tags": ["domain", "dns", "registrar", "availability", "whois", "rdap"],
-  "features": [
-    "Multi-source domain search",
-    "Price comparison",
-    "50+ TLD support",
-    "Social handle checking",
-    "Premium domain detection",
-    "Expiration tracking"
-  ]
+  "description": "Check domain availability and pricing across multiple registrars (Porkbun, Namecheap, RDAP, WHOIS) in real-time. Includes social handle checking for 10 platforms."
 }
