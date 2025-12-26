@@ -1,0 +1,36 @@
+# Smithery configuration for Domain Search MCP
+# https://smithery.ai/docs/build/config
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      PORKBUN_API_KEY:
+        type: string
+        description: "Porkbun API key (optional)"
+      PORKBUN_API_SECRET:
+        type: string
+        description: "Porkbun API secret (optional)"
+      NAMECHEAP_API_KEY:
+        type: string
+        description: "Namecheap API key (optional)"
+      NAMECHEAP_API_USER:
+        type: string
+        description: "Namecheap API username (optional)"
+      NAMECHEAP_CLIENT_IP:
+        type: string
+        description: "Your whitelisted IP for Namecheap API (optional)"
+    required: []
+  commandFunction: |-
+    (config) => ({
+      command: 'node',
+      args: ['dist/index.js'],
+      env: {
+        PORKBUN_API_KEY: config.PORKBUN_API_KEY || '',
+        PORKBUN_API_SECRET: config.PORKBUN_API_SECRET || '',
+        NAMECHEAP_API_KEY: config.NAMECHEAP_API_KEY || '',
+        NAMECHEAP_API_USER: config.NAMECHEAP_API_USER || '',
+        NAMECHEAP_CLIENT_IP: config.NAMECHEAP_CLIENT_IP || ''
+      }
+    })
