@@ -1,0 +1,62 @@
+{
+  "name": "domain-search-mcp",
+  "version": "1.0.0",
+  "description": "Fast domain availability aggregator MCP server. Check availability across Porkbun, Namecheap, RDAP, and WHOIS. Compare pricing. Get suggestions.",
+  "main": "dist/server.js",
+  "types": "dist/server.d.ts",
+  "bin": {
+    "domain-search-mcp": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=tests/unit",
+    "test:integration": "jest --testPathPattern=tests/integration",
+    "test:watch": "jest --watch",
+    "coverage": "jest --coverage",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "domain",
+    "domain-search",
+    "porkbun",
+    "namecheap",
+    "whois",
+    "rdap",
+    "registrar",
+    "vibecoding"
+  ],
+  "author": "Doruk Ardahan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dorukardahan/domain-search-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dorukardahan/domain-search-mcp/issues"
+  },
+  "homepage": "https://github.com/dorukardahan/domain-search-mcp#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.10.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  }
+}
