@@ -1,5 +1,9 @@
 # Domain Search MCP
 
+<a href="https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp/badge" alt="Domain Search MCP on Glama" />
+</a>
+
 Fast domain availability aggregator for AI assistants. Check domain availability across Porkbun, Namecheap, RDAP, and WHOIS. Compare pricing. Get suggestions.
 
 Built with the [Model Context Protocol (MCP)](https://anthropic.com/model-context-protocol) for seamless integration with Claude Desktop, Cursor, Cline, and other AI tools.

@@ -1,62 +1,14 @@
 {
-  "id": "domain-search-mcp",
   "name": "Domain Search MCP",
-  "version": "1.0.0",
-  "author": "dorukardahan",
-  "description": "Fast domain availability aggregator for AI assistants. Check availability across Porkbun, Namecheap, RDAP, and WHOIS. Compare pricing. Get suggestions. Works out-of-box with Claude Desktop, Cursor, and Cline.",
-  "long_description": "A Model Context Protocol server that enables rapid domain discovery and comparison across multiple registrars. Features include: search_domain (check availability across TLDs), bulk_search (check up to 100 domains), compare_registrars (find best prices), suggest_domains (get available variations), tld_info (learn about TLDs), and check_socials (verify username availability). Works without API keys using RDAP/WHOIS fallbacks. Designed for the vibecoding community with magic in under 60 seconds.",
-  "categories": ["domains", "utilities", "search", "comparison"],
-  "tags": ["domain", "registrar", "porkbun", "namecheap", "whois", "rdap", "availability", "pricing", "suggestions"],
-  "tools": 6,
-  "tool_names": ["search_domain", "bulk_search", "compare_registrars", "suggest_domains", "tld_info", "check_socials"],
-  "source": "https://github.com/dorukardahan/domain-search-mcp",
-  "readme_url": "https://github.com/dorukardahan/domain-search-mcp/blob/main/README.md",
-  "license": "MIT",
-  "requires_auth": false,
-  "api_keys_needed": [
-    {
-      "name": "porkbun",
-      "required": false,
-      "description": "Porkbun API key for pricing information. Get free at https://porkbun.com/account/api"
-    },
-    {
-      "name": "namecheap",
-      "required": false,
-      "description": "Namecheap API key. Requires IP whitelist in dashboard."
-    }
-  ],
-  "can_be_used_without_auth": true,
-  "platforms": ["claude-desktop", "cursor", "cline"],
-  "runtime": "node",
-  "min_node_version": "18.0.0",
-  "installation": {
-    "type": "npm",
-    "commands": [
-      "git clone https://github.com/yourusername/domain-search-mcp.git",
-      "cd domain-search-mcp",
-      "npm install",
-      "npm run build"
-    ]
-  },
-  "configuration": {
-    "claude_desktop": {
-      "mcpServers": {
-        "domain-search": {
-          "command": "node",
-          "args": ["/path/to/domain-search-mcp/dist/server.js"]
-        }
-      }
-    }
-  },
-  "quality_indicators": {
-    "has_tests": true,
-    "test_coverage_percent": 60,
-    "has_documentation": true,
-    "has_examples": true,
-    "follows_mcp_spec": true,
-    "graceful_error_handling": true,
-    "rate_limiting": true,
-    "caching": true
-  },
-  "last_updated": "2025-12-26"
+  "description": "Check domain availability and pricing across multiple registrars (Porkbun, Namecheap, RDAP, WHOIS) in real-time. Includes social handle checking for 10 platforms.",
+  "categories": ["search", "developer-tools"],
+  "tags": ["domain", "dns", "registrar", "availability", "whois", "rdap"],
+  "features": [
+    "Multi-source domain search",
+    "Price comparison",
+    "50+ TLD support",
+    "Social handle checking",
+    "Premium domain detection",
+    "Expiration tracking"
+  ]
 }
