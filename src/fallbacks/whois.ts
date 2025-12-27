@@ -13,6 +13,7 @@ import axios, { type AxiosError } from 'axios';
 import type { DomainResult } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { TimeoutError, RegistrarApiError } from '../utils/errors.js';
+import { ConcurrencyLimiter, KeyedLimiter } from '../utils/concurrency.js';
 
 /**
  * WHOIS server mappings for common TLDs.
@@ -31,6 +32,12 @@ const WHOIS_SERVERS: Record<string, string> = {
   xyz: 'whois.nic.xyz',
   sh: 'whois.nic.sh',
 };
+
+const WHOIS_TIMEOUT_MS = 1500;
+const WHOIS_GLOBAL_CONCURRENCY = 2;
+const WHOIS_HOST_CONCURRENCY = 1;
+const whoisGlobalLimiter = new ConcurrencyLimiter(WHOIS_GLOBAL_CONCURRENCY);
+const whoisHostLimiter = new KeyedLimiter(WHOIS_HOST_CONCURRENCY);
 
 /**
  * Patterns that indicate a domain is NOT available.
@@ -96,69 +103,75 @@ export async function checkWhois(
   const fullDomain = `${domain}.${tld}`;
   logger.debug('WHOIS check', { domain: fullDomain });
 
-  // Use a public WHOIS API service
-  // There are several options; we'll try a few
-  const apis = [
-    {
-      url: `https://whoisjson.com/api/v1/whois`,
-      params: { domain: fullDomain },
-      parser: (data: Record<string, unknown>) => {
-        // If we get a result, domain is registered
-        if (data.domain_name || data.registrar) {
-          return false;
-        }
-        // If error or no data, domain might be available
-        return true;
-      },
-    },
-  ];
+  const serverKey = getWhoisServer(tld) ?? `tld:${tld}`;
 
-  // Try each API in order
-  for (const api of apis) {
-    try {
-      const response = await axios.get(api.url, {
-        params: api.params,
-        timeout: 15000,
-        headers: {
-          Accept: 'application/json',
+  return whoisGlobalLimiter.run(() =>
+    whoisHostLimiter.run(serverKey, async () => {
+      // Use a public WHOIS API service
+      // There are several options; we'll try a few
+      const apis = [
+        {
+          url: `https://whoisjson.com/api/v1/whois`,
+          params: { domain: fullDomain },
+          parser: (data: Record<string, unknown>) => {
+            // If we get a result, domain is registered
+            if (data.domain_name || data.registrar) {
+              return false;
+            }
+            // If error or no data, domain might be available
+            return true;
+          },
         },
-        validateStatus: () => true, // Don't throw on any status
-      });
+      ];
 
-      if (response.status === 200 && response.data) {
-        // Try to parse the response
-        let available: boolean;
+      // Try each API in order
+      for (const api of apis) {
+        try {
+          const response = await axios.get(api.url, {
+            params: api.params,
+            timeout: WHOIS_TIMEOUT_MS,
+            headers: {
+              Accept: 'application/json',
+            },
+            validateStatus: () => true, // Don't throw on any status
+          });
 
-        if (typeof response.data === 'string') {
-          available = parseWhoisResponse(response.data);
-        } else {
-          available = api.parser(response.data as Record<string, unknown>);
+          if (response.status === 200 && response.data) {
+            // Try to parse the response
+            let available: boolean;
+
+            if (typeof response.data === 'string') {
+              available = parseWhoisResponse(response.data);
+            } else {
+              available = api.parser(response.data as Record<string, unknown>);
+            }
+
+            return createWhoisResult(domain, tld, available);
+          }
+        } catch (error) {
+          logger.debug('WHOIS API failed, trying next', {
+            api: api.url,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      // If all APIs fail, try a simple text-based WHOIS lookup
+      try {
+        const available = await textBasedWhoisCheck(fullDomain, tld);
+        return createWhoisResult(domain, tld, available);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('timeout')) {
+          throw new TimeoutError('WHOIS lookup', WHOIS_TIMEOUT_MS);
         }
 
-        return createWhoisResult(domain, tld, available);
+        throw new RegistrarApiError(
+          'whois',
+          error instanceof Error ? error.message : 'All WHOIS lookups failed',
+        );
       }
-    } catch (error) {
-      logger.debug('WHOIS API failed, trying next', {
-        api: api.url,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  // If all APIs fail, try a simple text-based WHOIS lookup
-  try {
-    const available = await textBasedWhoisCheck(fullDomain, tld);
-    return createWhoisResult(domain, tld, available);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('timeout')) {
-      throw new TimeoutError('WHOIS lookup', 15000);
-    }
-
-    throw new RegistrarApiError(
-      'whois',
-      error instanceof Error ? error.message : 'All WHOIS lookups failed',
-    );
-  }
+    }),
+  );
 }
 
 /**
@@ -171,7 +184,7 @@ async function textBasedWhoisCheck(
   // Try who.is web service
   try {
     const response = await axios.get(`https://who.is/whois/${fullDomain}`, {
-      timeout: 15000,
+      timeout: WHOIS_TIMEOUT_MS,
       headers: {
         'User-Agent': 'Domain-Search-MCP/1.0',
       },

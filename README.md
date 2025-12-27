@@ -1,6 +1,6 @@
 # Domain Search MCP
 
-Fast domain availability checker for AI assistants. Check domains across Porkbun, Namecheap, GoDaddy, RDAP, and WHOIS. Compare pricing. Get AI-powered suggestions.
+Fast domain availability checker for AI assistants. Check domains via Porkbun, Namecheap, RDAP, and WHOIS, with GoDaddy premium/auction signals for `search_domain`. Compare pricing. Get AI-powered suggestions.
 
 <a href="https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp/badge" alt="Domain Search MCP" />
@@ -155,7 +155,7 @@ PORKBUN_API_SECRET=sk1_xxx
 |--------|-------|---------|---------------|
 | Porkbun API | Fast | Yes | API key |
 | Namecheap API | Fast | Yes | API key + IP whitelist |
-| GoDaddy public endpoint | Medium | No | None |
+| GoDaddy public endpoint | Signal only | No | None |
 | RDAP | Medium | No | None |
 | WHOIS | Slow | No | None |
 

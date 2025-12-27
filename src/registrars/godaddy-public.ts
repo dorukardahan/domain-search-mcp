@@ -27,6 +27,7 @@ import { RegistrarApiError } from '../utils/errors.js';
  * GoDaddy public endpoint.
  */
 const GODADDY_PUBLIC_ENDPOINT = 'https://api.godaddy.com/v1/domains/mcp';
+const GODADDY_TIMEOUT_MS = 900;
 
 /**
  * JSON-RPC request ID counter.
@@ -343,9 +344,11 @@ export class GodaddyPublicAdapter extends RegistrarAdapter {
     // GoDaddy accepts comma-separated domains
     const domainList = domains.join(', ');
 
-    const text = await this.callPublicTool('domains_check_availability', {
-      domains: domainList,
-    });
+    const text = await this.retryWithBackoff(async () => {
+      return this.callPublicTool('domains_check_availability', {
+        domains: domainList,
+      });
+    }, `bulk check (${domains.length} domains)`);
 
     // Parse results for each domain
     for (const domain of domains) {
@@ -451,7 +454,7 @@ export class GodaddyPublicAdapter extends RegistrarAdapter {
           body: JSON.stringify(payload),
         }),
         `GoDaddy public ${toolName}`,
-        15000, // 15 second timeout
+        GODADDY_TIMEOUT_MS,
       );
 
       if (!response.ok) {

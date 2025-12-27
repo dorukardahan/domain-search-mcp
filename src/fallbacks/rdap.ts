@@ -11,6 +11,8 @@ import { z } from 'zod';
 import type { DomainResult } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { TimeoutError, RegistrarApiError } from '../utils/errors.js';
+import { TtlCache } from '../utils/cache.js';
+import { ConcurrencyLimiter, KeyedLimiter } from '../utils/concurrency.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Zod Schemas for RDAP Response Validation (RFC 7483)
@@ -61,6 +63,11 @@ const RdapDomainResponseSchema = z.object({
  * RDAP bootstrap URLs for different TLDs.
  */
 const RDAP_BOOTSTRAP = 'https://data.iana.org/rdap/dns.json';
+
+const RDAP_TIMEOUT_MS = 800;
+const RDAP_ERROR_TTL_MS = 10_000;
+const RDAP_GLOBAL_CONCURRENCY = 20;
+const RDAP_HOST_CONCURRENCY = 2;
 
 /**
  * Fallback RDAP servers for common TLDs.
@@ -133,6 +140,9 @@ const RDAP_SERVERS: Record<string, string> = {
  * Cache for RDAP server lookups.
  */
 let rdapServerCache: Record<string, string> | null = null;
+const rdapErrorCache = new TtlCache<boolean>(10, 5000);
+const rdapGlobalLimiter = new ConcurrencyLimiter(RDAP_GLOBAL_CONCURRENCY);
+const rdapHostLimiter = new KeyedLimiter(RDAP_HOST_CONCURRENCY);
 
 /**
  * Get the RDAP server URL for a TLD.
@@ -282,22 +292,37 @@ export async function checkRdap(
   const fullDomain = `${domain}.${tld}`;
   logger.debug('RDAP check', { domain: fullDomain });
 
+  const errorKey = `rdap:${fullDomain.toLowerCase()}`;
+  if (rdapErrorCache.has(errorKey)) {
+    throw new RegistrarApiError('rdap', 'Recent RDAP failure, backing off');
+  }
+
   const server = await getRdapServer(tld);
   if (!server) {
     throw new RegistrarApiError('rdap', `No RDAP server found for .${tld}`);
   }
 
   const url = `${server}/domain/${fullDomain}`;
+  let serverHost = server;
+  try {
+    serverHost = new URL(server).hostname;
+  } catch {
+    // Leave serverHost as-is if URL parsing fails.
+  }
 
   try {
-    const response = await axios.get(url, {
-      timeout: 10000,
-      headers: {
-        Accept: 'application/rdap+json',
-      },
-      // Don't throw on 404 - that means available
-      validateStatus: (status) => status < 500,
-    });
+    const response = await rdapGlobalLimiter.run(() =>
+      rdapHostLimiter.run(serverHost, () =>
+        axios.get(url, {
+          timeout: RDAP_TIMEOUT_MS,
+          headers: {
+            Accept: 'application/rdap+json',
+          },
+          // Don't throw on 404 - that means available
+          validateStatus: (status) => status < 500,
+        }),
+      ),
+    );
 
     // 404 = domain not found = available
     if (response.status === 404) {
@@ -322,7 +347,8 @@ export async function checkRdap(
       const axiosError = error as AxiosError;
 
       if (axiosError.code === 'ECONNABORTED') {
-        throw new TimeoutError('RDAP lookup', 10000);
+        rdapErrorCache.set(errorKey, true, RDAP_ERROR_TTL_MS);
+        throw new TimeoutError('RDAP lookup', RDAP_TIMEOUT_MS);
       }
 
       // 404 = available
@@ -330,6 +356,7 @@ export async function checkRdap(
         return createRdapResult(domain, tld, true);
       }
 
+      rdapErrorCache.set(errorKey, true, RDAP_ERROR_TTL_MS);
       throw new RegistrarApiError(
         'rdap',
         axiosError.message,
@@ -338,6 +365,7 @@ export async function checkRdap(
       );
     }
 
+    rdapErrorCache.set(errorKey, true, RDAP_ERROR_TTL_MS);
     throw new RegistrarApiError(
       'rdap',
       error instanceof Error ? error.message : 'Unknown error',

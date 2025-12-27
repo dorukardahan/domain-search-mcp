@@ -41,9 +41,9 @@ The server automatically selects the best available source:
 
 1. **Porkbun API** - If configured (fastest, with pricing)
 2. **Namecheap API** - If configured
-3. **GoDaddy public endpoint** - Always available (no auth needed)
-4. **RDAP** - Fallback (fast, no pricing)
-5. **WHOIS** - Last resort (slow)
+3. **RDAP** - Primary public availability source (fast, no pricing)
+4. **WHOIS** - Last resort (slow)
+5. **GoDaddy public endpoint** - Used only for premium/auction signals in `search_domain`
 
 ## Environment Variables
 
@@ -55,7 +55,7 @@ The server automatically selects the best available source:
 | `NAMECHEAP_API_USER` | - | Namecheap username |
 | `NAMECHEAP_CLIENT_IP` | - | Whitelisted IP |
 | `LOG_LEVEL` | info | Logging level |
-| `CACHE_TTL_AVAILABILITY` | 300 | Cache TTL (seconds) |
+| `CACHE_TTL_AVAILABILITY` | 60 | Cache TTL (seconds) for available results (taken results use ~2x) |
 | `CACHE_TTL_PRICING` | 3600 | Pricing cache TTL |
 
 ## Claude Desktop Setup
@@ -143,14 +143,14 @@ The server handles rate limits automatically with exponential backoff.
 
 Results are cached in memory:
 
-- Availability: 5 minutes
+- Availability: 60s (taken results ~120s)
 - Pricing: 1 hour
 - TLD info: 24 hours
 
 Configure via environment:
 
 ```bash
-CACHE_TTL_AVAILABILITY=300  # seconds
+CACHE_TTL_AVAILABILITY=60  # seconds
 CACHE_TTL_PRICING=3600
 ```
 

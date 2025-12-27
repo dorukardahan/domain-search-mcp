@@ -25,7 +25,7 @@ interface SearchDomainResponse {
     price_renewal: number | null;
     privacy_included: boolean;
     registrar: string | null;
-    source: "porkbun_api" | "namecheap_api" | "godaddy_mcp" | "rdap" | "whois";
+    source: "porkbun_api" | "namecheap_api" | "godaddy_api" | "rdap" | "whois";
     premium: boolean;
     error?: string;
   }>;

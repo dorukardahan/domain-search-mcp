@@ -66,7 +66,7 @@ export function loadConfig(): Config {
     },
     logLevel: (env.LOG_LEVEL as Config['logLevel']) || 'info',
     cache: {
-      availabilityTtl: parseIntWithDefault(env.CACHE_TTL_AVAILABILITY, 300),
+      availabilityTtl: parseIntWithDefault(env.CACHE_TTL_AVAILABILITY, 60),
       pricingTtl: parseIntWithDefault(env.CACHE_TTL_PRICING, 3600),
     },
     rateLimitPerMinute: parseIntWithDefault(env.RATE_LIMIT_PER_MINUTE, 60),
@@ -116,7 +116,7 @@ export function getAvailableSources(): string[] {
   const sources: string[] = [];
   if (config.porkbun.enabled) sources.push('porkbun');
   if (config.namecheap.enabled) sources.push('namecheap');
-  sources.push('godaddy'); // GoDaddy public endpoint - always available (no auth needed)
   sources.push('rdap', 'whois'); // Always available as fallbacks
+  sources.push('godaddy_signal'); // GoDaddy public endpoint for premium/auction signals
   return sources;
 }

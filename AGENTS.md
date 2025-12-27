@@ -36,3 +36,6 @@
 - Use `.env` for secrets and keep it out of version control; required keys are listed in `README.md` and `docs/CONFIGURATION.md`.
 - Registrar API keys are optional; the server falls back to RDAP/WHOIS when unset.
 - Do not commit `.mcpregistry_*` token files.
+
+## Agent-Specific Instructions
+- Do not use MCP tools `coingecko`, `etherscan`, `mevzuat`, or `yargi` in this repository; rely on local files and standard shell commands instead.
