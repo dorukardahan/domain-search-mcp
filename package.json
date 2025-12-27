@@ -1,6 +1,6 @@
 {
   "name": "domain-search-mcp",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Fast domain availability aggregator MCP server. Check availability across Porkbun, Namecheap, RDAP, and WHOIS. Compare pricing. Get suggestions.",
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
