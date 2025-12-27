@@ -4,9 +4,9 @@
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp/badge" alt="Domain Search MCP on Glama" />
 </a>
 
-Fast domain availability aggregator for AI assistants. Check domain availability across Porkbun, Namecheap, RDAP, and WHOIS. Compare pricing. Get suggestions.
+Fast domain availability aggregator for AI assistants. Check domain availability across Porkbun, Namecheap, GoDaddy, RDAP, and WHOIS. Compare pricing. Get AI-powered suggestions.
 
-Built with the [Model Context Protocol (MCP)](https://anthropic.com/model-context-protocol) for seamless integration with Claude Desktop, Cursor, Cline, and other AI tools.
+Built with the [Model Context Protocol (MCP)](https://anthropic.com/model-context-protocol) for seamless integration with Claude Code, Codex, VS Code, Cursor, Cline, and other MCP-compatible clients.
 
 ## Get Started in 60 Seconds
 
@@ -41,7 +41,7 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 
 ### 3. Start Searching
 
-Open Claude Desktop and ask:
+Open your MCP-compatible client and ask:
 
 > "Check if vibecoding is available as a domain"
 
@@ -59,7 +59,7 @@ vibecoding.dev - Available - $10.18/year (Porkbun)
 
 ## Features
 
-### 6 Powerful Tools
+### 7 Powerful Tools
 
 | Tool | What it does |
 |------|--------------|
@@ -289,7 +289,7 @@ Learn about a TLD:
 
 ### check_socials
 
-Verify username availability:
+Verify username availability across 10 platforms:
 
 ```typescript
 // Input
@@ -303,7 +303,7 @@ Verify username availability:
   "name": "vibecoding",
   "results": [
     { "platform": "github", "available": true, "confidence": "high" },
-    { "platform": "twitter", "available": false, "confidence": "medium" },
+    { "platform": "twitter", "available": false, "confidence": "high" },
     { "platform": "instagram", "available": true, "confidence": "low" }
   ],
   "insights": [
@@ -313,6 +313,11 @@ Verify username availability:
   ]
 }
 ```
+
+**v1.2.0 Improvements:**
+- **Twitter**: Uses oembed API for reliable detection (no more false positives)
+- **Smart Caching**: Taken usernames cached 24h, available 1h, errors 5min
+- **Rate Limit Handling**: Automatic 429 detection with graceful error reporting
 
 ## Configuration
 
