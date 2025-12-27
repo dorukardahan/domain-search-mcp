@@ -56,10 +56,109 @@ const McpResponseSchema = z.object({
  * Parse availability from GoDaddy MCP text response.
  * The response is markdown-formatted text with different formats for single vs bulk queries.
  */
-interface ParsedAvailability {
+export interface ParsedAvailability {
   available: boolean;
   premium: boolean;
   auction: boolean;
+}
+
+/**
+ * Parsed suggestion from GoDaddy's domains_suggest response.
+ */
+export interface GodaddySuggestion {
+  domain: string;
+  available: boolean;
+  premium: boolean;
+  auction: boolean;
+}
+
+/**
+ * Parse suggestions from GoDaddy MCP domains_suggest response.
+ * Response format varies but typically includes categorized domain lists.
+ */
+function parseSuggestResponse(text: string): GodaddySuggestion[] {
+  const suggestions: GodaddySuggestion[] = [];
+  const seenDomains = new Set<string>();
+
+  // Helper to add a suggestion without duplicates
+  const addSuggestion = (domain: string, available: boolean, premium: boolean, auction: boolean) => {
+    const normalized = domain.toLowerCase().trim();
+    // Validate it looks like a domain (has at least one dot)
+    if (normalized.includes('.') && !seenDomains.has(normalized)) {
+      seenDomains.add(normalized);
+      suggestions.push({ domain: normalized, available, premium, auction });
+    }
+  };
+
+  // ==== SECTION-BASED PARSING ====
+  // GoDaddy groups suggestions by category with emojis
+
+  // ✅ Available/Standard domains
+  const availableMatch = text.match(/✅\s*\*\*(?:AVAILABLE|STANDARD)[^]*?(?=(?:💎|🔨|⚠️|❌|\*\*[A-Z])|$)/gi);
+  if (availableMatch) {
+    for (const section of availableMatch) {
+      // Extract domain names (word.tld format)
+      const domainMatches = section.match(/\b[a-z0-9][-a-z0-9]*\.[a-z]{2,}\b/gi);
+      if (domainMatches) {
+        for (const domain of domainMatches) {
+          addSuggestion(domain, true, false, false);
+        }
+      }
+    }
+  }
+
+  // 💎 Premium domains
+  const premiumMatch = text.match(/💎\s*\*\*PREMIUM[^]*?(?=(?:✅|🔨|⚠️|❌|\*\*[A-Z])|$)/gi);
+  if (premiumMatch) {
+    for (const section of premiumMatch) {
+      const domainMatches = section.match(/\b[a-z0-9][-a-z0-9]*\.[a-z]{2,}\b/gi);
+      if (domainMatches) {
+        for (const domain of domainMatches) {
+          addSuggestion(domain, true, true, false);
+        }
+      }
+    }
+  }
+
+  // 🔨 Auction domains
+  const auctionMatch = text.match(/🔨\s*\*\*AUCTION[^]*?(?=(?:✅|💎|⚠️|❌|\*\*[A-Z])|$)/gi);
+  if (auctionMatch) {
+    for (const section of auctionMatch) {
+      const domainMatches = section.match(/\b[a-z0-9][-a-z0-9]*\.[a-z]{2,}\b/gi);
+      if (domainMatches) {
+        for (const domain of domainMatches) {
+          addSuggestion(domain, true, false, true);
+        }
+      }
+    }
+  }
+
+  // ==== FALLBACK: Line-by-line extraction ====
+  // If section parsing didn't find much, try line-by-line
+  if (suggestions.length < 3) {
+    const lines = text.split('\n');
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+
+      // Skip header lines
+      if (lowerLine.includes('**') && !lowerLine.includes('.')) continue;
+
+      // Extract any domain-like patterns
+      const domainMatches = line.match(/\b[a-z0-9][-a-z0-9]*\.[a-z]{2,}\b/gi);
+      if (domainMatches) {
+        for (const domain of domainMatches) {
+          // Determine type from context
+          const isPremium = lowerLine.includes('premium') || lowerLine.includes('💎');
+          const isAuction = lowerLine.includes('auction') || lowerLine.includes('🔨');
+          const isUnavailable = lowerLine.includes('❌') || lowerLine.includes('unavailable');
+
+          addSuggestion(domain, !isUnavailable, isPremium, isAuction);
+        }
+      }
+    }
+  }
+
+  return suggestions;
 }
 
 function parseAvailabilityResponse(text: string, domain: string): ParsedAvailability {
@@ -262,6 +361,58 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
    */
   async getTldInfo(_tld: string): Promise<TLDInfo | null> {
     return null;
+  }
+
+  /**
+   * Get domain suggestions from GoDaddy MCP.
+   * Uses their domains_suggest tool for AI-powered suggestions.
+   *
+   * @param query - Keywords or business description (e.g., "sustainable fashion")
+   * @param options - Optional parameters for suggestion customization
+   * @returns Array of suggested domains with availability info
+   */
+  async suggestDomains(
+    query: string,
+    options: {
+      tlds?: string[];
+      limit?: number;
+    } = {},
+  ): Promise<GodaddySuggestion[]> {
+    const { tlds, limit = 50 } = options;
+
+    return this.retryWithBackoff(async () => {
+      // Build the query - GoDaddy accepts natural language
+      let fullQuery = query;
+      if (tlds && tlds.length > 0) {
+        fullQuery = `${query} (prefer .${tlds.join(', .')})`;
+      }
+
+      const text = await this.callMcpTool('domains_suggest', {
+        query: fullQuery,
+      });
+
+      logger.debug('GoDaddy domains_suggest raw response', {
+        query: fullQuery,
+        response_length: text.length,
+        preview: text.substring(0, 500),
+      });
+
+      const suggestions = parseSuggestResponse(text);
+
+      // Filter by TLD if specified
+      let filtered = suggestions;
+      if (tlds && tlds.length > 0) {
+        const tldSet = new Set(tlds.map(t => t.toLowerCase()));
+        filtered = suggestions.filter(s => {
+          const parts = s.domain.split('.');
+          const tld = parts[parts.length - 1];
+          return tld && tldSet.has(tld);
+        });
+      }
+
+      // Limit results
+      return filtered.slice(0, limit);
+    }, `suggest domains for "${query}"`);
   }
 
   /**

@@ -18,6 +18,8 @@ import {
   getSynonyms,
   getIndustryTerms,
 } from '../utils/semantic-engine.js';
+import { godaddyMcpAdapter, type GodaddySuggestion } from '../registrars/index.js';
+import { logger } from '../utils/logger.js';
 import type { DomainResult } from '../types.js';
 
 /**
@@ -101,14 +103,16 @@ export const suggestDomainsSmartTool = {
   description: `AI-powered domain name suggestion engine.
 
 Generate creative, brandable domain names from keywords or business descriptions.
-Uses semantic analysis, synonym expansion, and industry-specific vocabulary.
+Combines our semantic engine with GoDaddy's AI suggestions for maximum coverage.
 
 Features:
+- Dual-source suggestions: Our semantic engine + GoDaddy AI
 - Understands natural language queries ("coffee shop in seattle")
 - Auto-detects industry for contextual suggestions
 - Generates portmanteau/blended names (instagram = instant + telegram)
 - Applies modern naming patterns (ly, ify, io, hub, etc.)
 - Filters premium domains by default
+- Pre-verified availability via GoDaddy
 
 Examples:
 - suggest_domains_smart("ai customer service") → AI-themed suggestions
@@ -206,6 +210,7 @@ interface SmartSuggestion {
   privacy_included: boolean;
   score: number;
   category: 'standard' | 'premium' | 'auction' | 'unavailable';
+  source: 'semantic_engine' | 'godaddy_suggest' | 'both';
 }
 
 /**
@@ -217,7 +222,11 @@ interface SuggestDomainsSmartResponse {
   detected_industry: string | null;
   tld: string;
   style: string;
-  total_generated: number;
+  sources: {
+    semantic_engine: number;
+    godaddy_suggest: number;
+    merged: number;
+  };
   total_checked: number;
   results: {
     available: SmartSuggestion[];
@@ -243,27 +252,129 @@ export async function executeSuggestDomainsSmart(
     const detectedWords = segmentWords(normalizedQuery);
     const detectedIndustry = industry || detectIndustry(detectedWords);
 
-    // Generate smart suggestions
-    const rawSuggestions = generateSmartSuggestions(normalizedQuery, {
-      maxSuggestions: max_suggestions * 4, // Generate extra for filtering
+    // Track source statistics
+    const sourceStats = {
+      semantic_engine: 0,
+      godaddy_suggest: 0,
+      merged: 0,
+    };
+
+    // ========================================
+    // STEP 1: Generate suggestions from BOTH sources in parallel
+    // ========================================
+
+    // Source 1: Our semantic engine
+    const semanticSuggestions = generateSmartSuggestions(normalizedQuery, {
+      maxSuggestions: max_suggestions * 3,
       includePortmanteau: style === 'creative' || style === 'brandable',
       includeSynonyms: style !== 'short',
       includeIndustryTerms: !!detectedIndustry,
       industry: detectedIndustry || undefined,
     });
+    sourceStats.semantic_engine = semanticSuggestions.length;
 
-    // Apply style filter
-    const styledSuggestions = applyStyleFilter(rawSuggestions, style, normalizedQuery);
+    // Source 2: GoDaddy's AI suggestions (parallel call)
+    let godaddySuggestions: GodaddySuggestion[] = [];
+    try {
+      godaddySuggestions = await godaddyMcpAdapter.suggestDomains(query, {
+        tlds: [tld],
+        limit: max_suggestions * 2,
+      });
+      sourceStats.godaddy_suggest = godaddySuggestions.length;
+      logger.debug('GoDaddy suggestions received', {
+        count: godaddySuggestions.length,
+        sample: godaddySuggestions.slice(0, 3).map(s => s.domain),
+      });
+    } catch (error) {
+      // GoDaddy might fail - continue with just semantic suggestions
+      logger.warn('GoDaddy suggestions failed, using semantic engine only', {
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    }
 
-    // Limit candidates for availability check
-    const candidates = styledSuggestions.slice(0, max_suggestions * 2);
+    // ========================================
+    // STEP 2: Merge and deduplicate suggestions
+    // ========================================
 
-    // Check availability in parallel batches
+    // Track which domains came from which source
+    const domainSources = new Map<string, 'semantic_engine' | 'godaddy_suggest' | 'both'>();
+
+    // Add semantic suggestions (need availability check)
+    const styledSuggestions = applyStyleFilter(semanticSuggestions, style, normalizedQuery);
+    for (const name of styledSuggestions) {
+      const fullDomain = `${name}.${tld}`.toLowerCase();
+      domainSources.set(fullDomain, 'semantic_engine');
+    }
+
+    // Add GoDaddy suggestions (already have availability)
+    for (const gs of godaddySuggestions) {
+      const fullDomain = gs.domain.toLowerCase();
+      if (domainSources.has(fullDomain)) {
+        domainSources.set(fullDomain, 'both'); // Found in both sources
+        sourceStats.merged++;
+      } else {
+        domainSources.set(fullDomain, 'godaddy_suggest');
+      }
+    }
+
+    // ========================================
+    // STEP 3: Check availability for semantic suggestions
+    // (GoDaddy suggestions already have availability info)
+    // ========================================
+
+    const available: SmartSuggestion[] = [];
+    const premium: SmartSuggestion[] = [];
+    let unavailableCount = 0;
+    let totalChecked = 0;
+
+    // First, add pre-checked GoDaddy suggestions (no API call needed!)
+    for (const gs of godaddySuggestions) {
+      const fullDomain = gs.domain.toLowerCase();
+      const source = domainSources.get(fullDomain) || 'godaddy_suggest';
+      const name = fullDomain.replace(`.${tld}`, '');
+
+      const suggestion: SmartSuggestion = {
+        domain: fullDomain,
+        available: gs.available,
+        price_first_year: null, // GoDaddy doesn't provide pricing
+        price_renewal: null,
+        registrar: 'godaddy',
+        premium: gs.premium,
+        premium_detected: gs.premium,
+        privacy_included: false,
+        score: scoreDomainName(name, normalizedQuery),
+        category: !gs.available
+          ? 'unavailable'
+          : gs.premium
+          ? 'premium'
+          : gs.auction
+          ? 'auction'
+          : 'standard',
+        source,
+      };
+
+      if (!gs.available) {
+        unavailableCount++;
+      } else if (gs.premium || gs.auction) {
+        if (include_premium) {
+          premium.push(suggestion);
+        }
+      } else {
+        available.push(suggestion);
+      }
+    }
+
+    // Then, check semantic suggestions that weren't in GoDaddy results
+    const semanticOnlyCandidates = styledSuggestions
+      .filter(name => {
+        const fullDomain = `${name}.${tld}`.toLowerCase();
+        return domainSources.get(fullDomain) === 'semantic_engine';
+      })
+      .slice(0, max_suggestions); // Limit API calls
+
     const BATCH_SIZE = 5;
-    const results: Array<{ name: string; result: DomainResult | null }> = [];
-
-    for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
-      const batch = candidates.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < semanticOnlyCandidates.length; i += BATCH_SIZE) {
+      const batch = semanticOnlyCandidates.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
         batch.map(async (name) => {
           try {
@@ -275,64 +386,80 @@ export async function executeSuggestDomainsSmart(
           }
         }),
       );
-      results.push(...batchResults);
+
+      for (const { name, result } of batchResults) {
+        totalChecked++;
+        if (!result) {
+          unavailableCount++;
+          continue;
+        }
+
+        const isPremiumDomain = result.premium || isPremiumPrice(tld, result.price_first_year);
+        const fullDomain = `${name}.${tld}`.toLowerCase();
+
+        const suggestion: SmartSuggestion = {
+          domain: fullDomain,
+          available: result.available,
+          price_first_year: result.price_first_year,
+          price_renewal: result.price_renewal,
+          registrar: result.registrar,
+          premium: result.premium || false,
+          premium_detected: isPremiumPrice(tld, result.price_first_year),
+          privacy_included: result.privacy_included || false,
+          score: scoreDomainName(name, normalizedQuery),
+          category: !result.available
+            ? 'unavailable'
+            : isPremiumDomain
+            ? 'premium'
+            : 'standard',
+          source: 'semantic_engine',
+        };
+
+        if (!result.available) {
+          unavailableCount++;
+        } else if (isPremiumDomain) {
+          if (include_premium) {
+            premium.push(suggestion);
+          }
+        } else {
+          available.push(suggestion);
+        }
+      }
 
       // Early exit if we have enough available
-      const availableCount = results.filter(r => r.result?.available && !r.result?.premium).length;
-      if (availableCount >= max_suggestions && !include_premium) {
+      if (available.length >= max_suggestions && !include_premium) {
         break;
       }
     }
 
-    // Categorize results
-    const available: SmartSuggestion[] = [];
-    const premium: SmartSuggestion[] = [];
-    let unavailableCount = 0;
+    // ========================================
+    // STEP 4: Sort and finalize results
+    // ========================================
 
-    for (const { name, result } of results) {
-      if (!result) {
-        unavailableCount++;
-        continue;
-      }
-
-      const isPremium = result.premium || isPremiumPrice(tld, result.price_first_year);
-
-      const suggestion: SmartSuggestion = {
-        domain: `${name}.${tld}`,
-        available: result.available,
-        price_first_year: result.price_first_year,
-        price_renewal: result.price_renewal,
-        registrar: result.registrar,
-        premium: result.premium || false,
-        premium_detected: isPremiumPrice(tld, result.price_first_year),
-        privacy_included: result.privacy_included || false,
-        score: scoreDomainName(name, normalizedQuery),
-        category: !result.available
-          ? 'unavailable'
-          : isPremium
-          ? 'premium'
-          : 'standard',
-      };
-
-      if (!result.available) {
-        unavailableCount++;
-      } else if (isPremium) {
-        premium.push(suggestion);
-      } else {
-        available.push(suggestion);
-      }
-    }
-
-    // Sort by score
-    available.sort((a, b) => b.score - a.score);
+    // Sort by score, prefer 'both' source items (validated by multiple sources)
+    available.sort((a, b) => {
+      // Boost 'both' source items
+      const aBoost = a.source === 'both' ? 2 : 0;
+      const bBoost = b.source === 'both' ? 2 : 0;
+      return (b.score + bBoost) - (a.score + aBoost);
+    });
     premium.sort((a, b) => b.score - a.score);
 
     // Limit results
     const finalAvailable = available.slice(0, max_suggestions);
     const finalPremium = include_premium ? premium.slice(0, Math.floor(max_suggestions / 2)) : [];
 
-    // Generate insights
+    // ========================================
+    // STEP 5: Generate insights
+    // ========================================
+
     const insights: string[] = [];
+
+    // Source info
+    insights.push(`🔍 Sources: Semantic Engine (${sourceStats.semantic_engine}) + GoDaddy AI (${sourceStats.godaddy_suggest})`);
+    if (sourceStats.merged > 0) {
+      insights.push(`🔗 ${sourceStats.merged} suggestions found in both sources`);
+    }
 
     if (detectedIndustry) {
       insights.push(`🎯 Detected industry: ${detectedIndustry}`);
@@ -345,8 +472,9 @@ export async function executeSuggestDomainsSmart(
     if (finalAvailable.length > 0) {
       insights.push(`✅ Found ${finalAvailable.length} available domain${finalAvailable.length > 1 ? 's' : ''}`);
       const best = finalAvailable[0]!;
-      const priceStr = best.price_first_year !== null ? `$${best.price_first_year}/yr` : 'price unknown';
-      insights.push(`⭐ Top pick: ${best.domain} (${priceStr})`);
+      const priceStr = best.price_first_year !== null ? `$${best.price_first_year}/yr` : 'via ' + best.registrar;
+      const sourceStr = best.source === 'both' ? ' (verified by both sources)' : '';
+      insights.push(`⭐ Top pick: ${best.domain} (${priceStr})${sourceStr}`);
     } else {
       insights.push(`❌ No standard-priced domains available`);
     }
@@ -376,8 +504,8 @@ export async function executeSuggestDomainsSmart(
       detected_industry: detectedIndustry,
       tld,
       style,
-      total_generated: rawSuggestions.length,
-      total_checked: results.length,
+      sources: sourceStats,
+      total_checked: totalChecked + godaddySuggestions.length,
       results: {
         available: finalAvailable,
         premium: finalPremium,
