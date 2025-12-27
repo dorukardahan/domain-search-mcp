@@ -296,6 +296,20 @@ async function checkPlatform(
       maxRedirects: 0,
     });
 
+    // Handle rate limiting (429) - return uncertain instead of false negative
+    if (response.status === 429) {
+      logger.debug(`Rate limited on ${platform}`, { username });
+      return {
+        platform,
+        handle: username,
+        available: false,
+        url: profileUrl,
+        checked_at: new Date().toISOString(),
+        confidence: 'low', // Can't be sure due to rate limit
+        error: 'Rate limited - please try again later',
+      };
+    }
+
     let available = false;
 
     // Determine availability based on errorType
@@ -343,6 +357,7 @@ async function checkPlatform(
       url: profileUrl,
       checked_at: new Date().toISOString(),
       confidence: 'low',
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }

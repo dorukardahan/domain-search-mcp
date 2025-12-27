@@ -10,6 +10,7 @@
  * - bulk_search: Check many domains at once
  * - compare_registrars: Compare pricing across registrars
  * - suggest_domains: Generate available name variations
+ * - suggest_domains_smart: AI-powered domain suggestions with semantic analysis
  * - tld_info: Get TLD information and recommendations
  * - check_socials: Check social handle availability
  *
@@ -36,6 +37,8 @@ import {
   executeCompareRegistrars,
   suggestDomainsTool,
   executeSuggestDomains,
+  suggestDomainsSmartTool,
+  executeSuggestDomainsSmart,
   tldInfoTool,
   executeTldInfo,
   checkSocialsTool,
@@ -57,6 +60,7 @@ const TOOLS: Tool[] = [
   bulkSearchTool as Tool,
   compareRegistrarsTool as Tool,
   suggestDomainsTool as Tool,
+  suggestDomainsSmartTool as Tool,
   tldInfoTool as Tool,
   checkSocialsTool as Tool,
 ];
@@ -185,6 +189,18 @@ async function executeToolCall(
           | Array<'hyphen' | 'numbers' | 'abbreviations' | 'synonyms' | 'prefixes' | 'suffixes'>
           | undefined,
         max_suggestions: (args.max_suggestions as number) || 10,
+      });
+
+    case 'suggest_domains_smart':
+      return executeSuggestDomainsSmart({
+        query: args.query as string,
+        tld: (args.tld as string) || 'com',
+        industry: args.industry as
+          | 'tech' | 'startup' | 'finance' | 'health' | 'food' | 'creative' | 'ecommerce' | 'education' | 'gaming' | 'social'
+          | undefined,
+        style: (args.style as 'brandable' | 'descriptive' | 'short' | 'creative') || 'brandable',
+        max_suggestions: (args.max_suggestions as number) || 15,
+        include_premium: (args.include_premium as boolean) || false,
       });
 
     case 'tld_info':

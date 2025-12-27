@@ -166,6 +166,8 @@ export interface SocialHandleResult {
   checked_at: string;
   /** Some platforms can't be reliably checked */
   confidence: 'high' | 'medium' | 'low';
+  /** Error message if check failed (rate limit, timeout, etc.) */
+  error?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

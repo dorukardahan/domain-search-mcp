@@ -67,6 +67,7 @@ vibecoding.dev - Available - $10.18/year (Porkbun)
 | **bulk_search** | Check up to 100 domains at once |
 | **compare_registrars** | Find the best price across registrars |
 | **suggest_domains** | Get available variations when your name is taken |
+| **suggest_domains_smart** | AI-powered suggestions from keywords or descriptions |
 | **tld_info** | Learn about TLDs, restrictions, and typical pricing |
 | **check_socials** | Verify if usernames are available on GitHub, Twitter, Instagram |
 
@@ -209,6 +210,59 @@ Get variations when your preferred name is taken:
 }
 ```
 
+### suggest_domains_smart
+
+AI-powered domain suggestions using semantic analysis:
+
+```typescript
+// Input - natural language query
+{
+  "query": "ai customer service chatbot",
+  "tld": "io",
+  "industry": "tech",  // optional - auto-detected
+  "style": "brandable", // brandable, descriptive, short, creative
+  "max_suggestions": 10
+}
+
+// Output
+{
+  "query": "ai customer service chatbot",
+  "detected_words": ["ai", "customer", "service", "chat", "bot"],
+  "detected_industry": "tech",
+  "results": {
+    "available": [
+      {
+        "domain": "servicebotai.io",
+        "price_first_year": 32.98,
+        "premium": false,
+        "score": 72
+      },
+      {
+        "domain": "chatservicehub.io",
+        "price_first_year": 32.98,
+        "premium": false,
+        "score": 68
+      }
+    ],
+    "premium": [],
+    "unavailable_count": 15
+  },
+  "insights": [
+    "🎯 Detected industry: tech",
+    "✅ Found 8 available domains",
+    "⭐ Top pick: servicebotai.io ($32.98/yr)"
+  ],
+  "related_terms": ["neural", "cognitive", "assist", "connect"]
+}
+```
+
+**Features:**
+- Understands natural language queries ("coffee shop in seattle")
+- Auto-detects industry for contextual suggestions
+- Generates portmanteau/blended names
+- Multiple style modes (brandable, short, creative)
+- Premium domain detection
+
 ### tld_info
 
 Learn about a TLD:
@@ -344,6 +398,7 @@ domain-search-mcp/
 │   │   ├── bulk_search.ts
 │   │   ├── compare_registrars.ts
 │   │   ├── suggest_domains.ts
+│   │   ├── suggest_domains_smart.ts  # AI-powered suggestions
 │   │   ├── tld_info.ts
 │   │   └── check_socials.ts
 │   ├── registrars/         # Registrar adapters
@@ -359,7 +414,8 @@ domain-search-mcp/
 │       ├── logger.ts
 │       ├── cache.ts
 │       ├── errors.ts
-│       └── validators.ts
+│       ├── validators.ts
+│       └── semantic-engine.ts  # Word segmentation & suggestions
 ├── tests/
 │   ├── unit/
 │   └── integration/

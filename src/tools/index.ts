@@ -31,6 +31,13 @@ export {
 } from './suggest_domains.js';
 
 export {
+  suggestDomainsSmartTool,
+  suggestDomainsSmartSchema,
+  executeSuggestDomainsSmart,
+  type SuggestDomainsSmartInput,
+} from './suggest_domains_smart.js';
+
+export {
   tldInfoTool,
   tldInfoSchema,
   executeTldInfo,

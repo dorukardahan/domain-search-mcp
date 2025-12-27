@@ -2,10 +2,11 @@
  * Domain Search Service.
  *
  * Orchestrates domain availability checks across multiple sources:
- * 1. Porkbun (primary, if configured)
- * 2. Namecheap (secondary, if configured)
- * 3. RDAP (fallback, always available)
- * 4. WHOIS (last resort, always available)
+ * 1. Porkbun (primary, if configured - has pricing)
+ * 2. Namecheap (secondary, if configured - has pricing)
+ * 3. GoDaddy MCP (always available - no auth, no pricing, great availability data)
+ * 4. RDAP (fallback, always available)
+ * 5. WHOIS (last resort, always available)
  *
  * Handles:
  * - Smart source selection based on availability and configuration
@@ -28,7 +29,7 @@ import {
   buildDomain,
 } from '../utils/validators.js';
 import { domainCache, domainCacheKey, getOrCompute } from '../utils/cache.js';
-import { porkbunAdapter, namecheapAdapter } from '../registrars/index.js';
+import { porkbunAdapter, namecheapAdapter, godaddyMcpAdapter } from '../registrars/index.js';
 import { checkRdap, isRdapAvailable } from '../fallbacks/rdap.js';
 import { checkWhois, isWhoisAvailable } from '../fallbacks/whois.js';
 import {
@@ -125,7 +126,7 @@ async function searchSingleDomain(
   const triedSources: string[] = [];
 
   // Check cache first
-  for (const source of ['porkbun', 'namecheap', 'rdap', 'whois'] as const) {
+  for (const source of ['porkbun', 'namecheap', 'godaddy', 'rdap', 'whois'] as const) {
     const cacheKey = domainCacheKey(fullDomain, source);
     const cached = domainCache.get(cacheKey);
     if (cached) {
@@ -182,6 +183,14 @@ async function searchSingleDomain(
 
 /**
  * Build the priority list of sources to try.
+ *
+ * Priority order:
+ * 1. Preferred registrars (if specified)
+ * 2. Porkbun (has pricing, best API)
+ * 3. Namecheap (has pricing)
+ * 4. GoDaddy MCP (free, no pricing but good availability data)
+ * 5. RDAP (free, no pricing)
+ * 6. WHOIS (slowest fallback)
  */
 function buildSourcePriority(
   tld: string,
@@ -196,21 +205,25 @@ function buildSourcePriority(
         sources.push('porkbun');
       } else if (registrar === 'namecheap' && config.namecheap.enabled) {
         sources.push('namecheap');
+      } else if (registrar === 'godaddy') {
+        sources.push('godaddy');
       }
     }
   } else {
-    // Default priority: Porkbun first (better API), then Namecheap
+    // Default priority: Porkbun first (best API with pricing), then Namecheap, then GoDaddy
     if (config.porkbun.enabled) sources.push('porkbun');
     if (config.namecheap.enabled) sources.push('namecheap');
+    // GoDaddy MCP is always available (no auth needed)
+    sources.push('godaddy');
   }
 
   // Always add fallbacks
   if (isRdapAvailable(tld)) sources.push('rdap');
   if (isWhoisAvailable(tld)) sources.push('whois');
 
-  // If no registrar APIs, RDAP should be first
+  // If no registrar APIs, GoDaddy MCP and RDAP should be first
   if (sources.length === 0) {
-    sources.push('rdap', 'whois');
+    sources.push('godaddy', 'rdap', 'whois');
   }
 
   return sources;
@@ -230,6 +243,9 @@ async function trySource(
 
     case 'namecheap':
       return namecheapAdapter.search(domain, tld);
+
+    case 'godaddy':
+      return godaddyMcpAdapter.search(domain, tld);
 
     case 'rdap':
       return checkRdap(domain, tld);
