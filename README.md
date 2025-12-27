@@ -1,24 +1,58 @@
 # Domain Search MCP
 
-Fast domain availability checker for AI assistants. Check domains via Porkbun, Namecheap, RDAP, and WHOIS, with GoDaddy premium/auction signals for `search_domain`. Compare pricing. Get AI-powered suggestions.
+Fast domain availability checks for AI assistants and local workflows. The server runs fully local, falls back to public RDAP/WHOIS when no API keys are configured, and optionally enriches results with registrar pricing when keys are present.
 
 <a href="https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp/badge" alt="Domain Search MCP" />
 </a>
 
-## Quick Start
+## What This MCP Does
 
-### Install
+- Checks domain availability across multiple TLDs.
+- Returns registrar pricing when API keys are configured.
+- Detects premium/auction signals via GoDaddy public endpoint (search_domain only).
+- Suggests names and checks social handles.
+
+## Architecture Overview
+
+Availability and pricing are intentionally separated:
+
+- **Availability (default, always on):**
+  - Primary: RDAP
+  - Fallback: WHOIS
+  - GoDaddy public endpoint: premium/auction signal only, used in `search_domain`
+- **Pricing (optional, BYOK):**
+  - Porkbun and Namecheap adapters provide first-year/renewal pricing if keys are configured.
+  - If no keys are set, prices are `null`.
+
+This keeps the MCP zero-config while still allowing power users to enable pricing.
+
+## Tools
+
+- `search_domain`: Check a single name across multiple TLDs. Includes GoDaddy premium/auction signal.
+- `bulk_search`: Check up to 100 names for a single TLD. Uses RDAP/WHOIS unless a registrar is specified.
+- `compare_registrars`: Compare pricing for a domain across registrars (meaningful only with API keys).
+- `suggest_domains`: Generate simple variations (prefix/suffix/hyphen).
+- `suggest_domains_smart`: AI-assisted suggestions (GoDaddy signal may be used indirectly via availability checks).
+- `tld_info`: TLD metadata and guidance.
+- `check_socials`: Username availability across platforms.
+
+## Quick Start
 
 ```bash
 git clone https://github.com/dorukardahan/domain-search-mcp.git
 cd domain-search-mcp
-npm install && npm run build
+npm install
+npm run build
 ```
 
-### Configure Claude Desktop
+### Run Locally
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+```bash
+npm start
+```
+
+### Claude Desktop
 
 ```json
 {
@@ -31,181 +65,77 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-### Try It
-
-Ask Claude: *"Check if vibecoding is available as a domain"*
-
-```
-vibecoding.com - Available - $8.95/year
-vibecoding.io  - Available - $29.88/year
-vibecoding.dev - Available - $10.18/year
-```
-
-## Tools
-
-### search_domain
-
-Check domain availability across multiple TLDs with pricing.
-
-```typescript
-const result = await searchDomain({
-  domain_name: "myproject",
-  tlds: ["com", "io", "dev"]
-});
-
-// Returns: availability, pricing, registrar info for each TLD
-```
-
-**Parameters:**
-- `domain_name` (required): Domain name without TLD
-- `tlds`: TLDs to check (default: `["com", "io", "dev"]`)
-
-### bulk_search
-
-Check up to 100 domains at once.
-
-```typescript
-const result = await bulkSearch({
-  domains: ["startup1", "startup2", "startup3"],
-  tld: "com"
-});
-
-// Returns: { available: 2, taken: 1, results: [...] }
-```
-
-### compare_registrars
-
-Find the best price across registrars.
-
-```typescript
-const result = await compareRegistrars({
-  domain: "myproject",
-  tld: "com"
-});
-
-// Returns: pricing comparison, recommendation
-```
-
-### suggest_domains
-
-Generate alternatives when your preferred name is taken.
-
-```typescript
-const result = await suggestDomains({
-  base_name: "techapp",  // taken
-  tld: "com",
-  variants: ["prefixes", "suffixes", "hyphen"]
-});
-
-// Returns: gettechapp.com, techapphq.com, tech-app.com...
-```
-
-### suggest_domains_smart
-
-AI-powered suggestions from keywords or descriptions.
-
-```typescript
-const result = await suggestDomainsSmart({
-  query: "ai customer service startup",
-  tld: "com",
-  style: "brandable"
-});
-
-// Returns: creative, brandable domain suggestions
-```
-
-### tld_info
-
-Get TLD information, restrictions, and pricing.
-
-```typescript
-const result = await tldInfo({ tld: "io" });
-
-// Returns: description, typical price, restrictions
-```
-
-### check_socials
-
-Check username availability on social platforms.
-
-```typescript
-const result = await checkSocials({
-  name: "mybrand",
-  platforms: ["github", "twitter", "instagram"]
-});
-
-// Returns: availability status per platform
-```
-
 ## Configuration
 
-### Works Without API Keys
+### Optional API Keys (Pricing)
 
-The server works out of the box using RDAP/WHOIS fallbacks. For faster responses and pricing data, add API keys:
+Porkbun (recommended):
 
 ```bash
-# .env file
-PORKBUN_API_KEY=pk1_xxx      # Get free at porkbun.com/account/api
-PORKBUN_API_SECRET=sk1_xxx
+PORKBUN_API_KEY=pk1_your_api_key
+PORKBUN_API_SECRET=sk1_your_secret
 ```
 
-### Data Sources
+Namecheap (requires IP whitelist):
 
-| Source | Speed | Pricing | Auth Required |
-|--------|-------|---------|---------------|
-| Porkbun API | Fast | Yes | API key |
-| Namecheap API | Fast | Yes | API key + IP whitelist |
-| GoDaddy public endpoint | Signal only | No | None |
-| RDAP | Medium | No | None |
-| WHOIS | Slow | No | None |
-
-## Error Handling
-
-The server returns structured errors:
-
-```json
-{
-  "error": true,
-  "code": "RATE_LIMIT",
-  "message": "Too many requests",
-  "retryable": true,
-  "suggestedAction": "Wait 30 seconds"
-}
+```bash
+NAMECHEAP_API_KEY=your_api_key
+NAMECHEAP_API_USER=your_username
+NAMECHEAP_CLIENT_IP=your_whitelisted_ip
 ```
 
-| Code | Description | Retryable |
-|------|-------------|-----------|
-| `INVALID_DOMAIN` | Invalid domain format | No |
-| `RATE_LIMIT` | Too many requests | Yes |
-| `TIMEOUT` | Request timed out | Yes |
-| `NO_SOURCE_AVAILABLE` | All sources failed | Yes |
+### Environment Variables
 
-## Rate Limiting
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORKBUN_API_KEY` | - | Porkbun API key |
+| `PORKBUN_API_SECRET` | - | Porkbun API secret |
+| `NAMECHEAP_API_KEY` | - | Namecheap API key |
+| `NAMECHEAP_API_USER` | - | Namecheap username |
+| `NAMECHEAP_CLIENT_IP` | - | Namecheap IP whitelist |
+| `LOG_LEVEL` | info | Logging level |
+| `CACHE_TTL_AVAILABILITY` | 60 | Availability cache TTL (seconds) |
+| `CACHE_TTL_PRICING` | 3600 | Pricing cache TTL (seconds) |
 
-Without API keys, WHOIS/RDAP have strict limits (10-50 req/min). The server handles this automatically with exponential backoff and source fallback.
+## Data Sources (Current Behavior)
 
-For high-volume searches, configure Porkbun API keys (1000+ req/min).
+| Source | Usage | Pricing |
+|--------|-------|---------|
+| Porkbun API | Availability + pricing | Yes (with keys) |
+| Namecheap API | Availability + pricing | Yes (with keys) |
+| RDAP | Primary availability | No |
+| WHOIS | Fallback availability | No |
+| GoDaddy public endpoint | Premium/auction signal only (search_domain) | No |
 
-## Documentation
+## Example Output (No API Keys)
 
-- [API Reference](docs/API.md) - Complete API documentation
-- [Workflows](docs/WORKFLOWS.md) - Common usage patterns
-- [Configuration](docs/CONFIGURATION.md) - Detailed setup guide
+```
+search_domain("myproject", ["com", "io"])
+
+myproject.com - available - price_first_year: null - source: rdap
+myproject.io  - taken     - price_first_year: null - source: rdap
+```
 
 ## Development
 
 ```bash
-npm run dev      # Watch mode
-npm test         # Run tests
-npm run build    # Build for production
+npm run dev       # watch mode
+npm test          # run Jest
+npm run build     # compile to dist/
 ```
 
-## License
+## Security Notes
 
-MIT - See [LICENSE](LICENSE)
+- Do not commit API keys or `.mcpregistry_*` files.
+- Without API keys, availability still works but pricing is not available.
 
-## Links
+## Context7
 
-- [GitHub](https://github.com/dorukardahan/domain-search-mcp)
-- [npm](https://www.npmjs.com/package/domain-search-mcp)
-- [Issues](https://github.com/dorukardahan/domain-search-mcp/issues)
+This repo is indexed for Context7. Metadata lives in `context7.json`:
+- URL: https://context7.com/dorukardahan/domain-search-mcp
+
+## Documentation
+
+- [API Reference](docs/API.md)
+- [Configuration](docs/CONFIGURATION.md)
+- [Workflows](docs/WORKFLOWS.md)
