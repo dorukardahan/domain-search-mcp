@@ -79,16 +79,23 @@ npx domain-search-mcp
 
 ## Configuration
 
-### Optional API Keys (Pricing)
+### Optional API Keys (Pricing) + Cost Notes
 
-Porkbun:
+- Porkbun API keys are generated from your account dashboard. API access is included with a Porkbun account (no separate paid API tier is listed in their docs).
+  - Get keys: https://porkbun.com/account/api
+  - API docs: https://porkbun.com/api/json/v3/documentation
+- Namecheap API access requires IP whitelisting and eligibility. Requirements can include account status/eligibility checks; verify before relying on it.
+  - API access settings: https://ap.www.namecheap.com/settings/tools/apiaccess/
+  - API docs: https://www.namecheap.com/support/api/intro/
+
+Porkbun env vars:
 
 ```bash
 PORKBUN_API_KEY=pk1_your_api_key
 PORKBUN_API_SECRET=sk1_your_secret
 ```
 
-Namecheap (requires IP whitelist):
+Namecheap env vars:
 
 ```bash
 NAMECHEAP_API_KEY=your_api_key
