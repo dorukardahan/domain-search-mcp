@@ -185,6 +185,118 @@ Find the best deal:
 }
 ```
 
+**Error Handling and User Presentation:**
+
+```typescript
+// Robust comparison with error handling and formatted output
+async function comparePricingWithPresentation(domain: string, tld: string) {
+  try {
+    const result = await compareRegistrars({
+      domain: domain,
+      tld: tld,
+      registrars: ["porkbun", "namecheap"]
+    });
+
+    // Format for user presentation
+    const presentation = formatPriceComparison(result);
+    return { success: true, data: result, formatted: presentation };
+
+  } catch (error) {
+    // Handle domain not available
+    if (error.code === "DOMAIN_UNAVAILABLE") {
+      return {
+        success: false,
+        error: `${domain}.${tld} is not available for registration`,
+        suggestion: "Try suggest_domains to find alternatives"
+      };
+    }
+
+    // Handle registrar API errors
+    if (error.code === "REGISTRAR_API_ERROR") {
+      // Try with remaining registrars
+      const workingRegistrars = error.failedRegistrars
+        ? ["porkbun", "namecheap"].filter(r => !error.failedRegistrars.includes(r))
+        : [];
+
+      if (workingRegistrars.length > 0) {
+        const partialResult = await compareRegistrars({
+          domain, tld,
+          registrars: workingRegistrars
+        });
+        return {
+          success: true,
+          partial: true,
+          data: partialResult,
+          note: `Some registrars unavailable. Showing ${workingRegistrars.join(', ')} only.`
+        };
+      }
+    }
+
+    // Handle rate limiting
+    if (error.code === "RATE_LIMIT") {
+      await new Promise(r => setTimeout(r, error.retryAfter * 1000));
+      return comparePricingWithPresentation(domain, tld);
+    }
+
+    throw error;
+  }
+}
+
+// Format comparison for display
+function formatPriceComparison(result) {
+  const lines = [
+    `Domain: ${result.domain}`,
+    ``,
+    `💰 PRICING COMPARISON`,
+    `${'─'.repeat(40)}`,
+  ];
+
+  // Add each registrar's pricing
+  if (result.registrar_prices) {
+    for (const [registrar, prices] of Object.entries(result.registrar_prices)) {
+      lines.push(`${registrar.toUpperCase()}`);
+      lines.push(`  First year: $${prices.first_year}`);
+      lines.push(`  Renewal:    $${prices.renewal}`);
+      lines.push(``);
+    }
+  }
+
+  lines.push(`${'─'.repeat(40)}`);
+  lines.push(`RECOMMENDATION`);
+  lines.push(`  Best first year: ${result.best_first_year.registrar} ($${result.best_first_year.price})`);
+  lines.push(`  Best renewal:    ${result.best_renewal.registrar} ($${result.best_renewal.price})`);
+  lines.push(``);
+  lines.push(`💡 ${result.recommendation}`);
+
+  return lines.join('\n');
+}
+
+// Usage
+const comparison = await comparePricingWithPresentation("startup", "io");
+if (comparison.success) {
+  console.log(comparison.formatted);
+}
+// Output:
+// Domain: startup.io
+//
+// 💰 PRICING COMPARISON
+// ────────────────────────────────────────
+// PORKBUN
+//   First year: $29.88
+//   Renewal:    $29.88
+//
+// NAMECHEAP
+//   First year: $32.98
+//   Renewal:    $32.98
+//
+// ────────────────────────────────────────
+// RECOMMENDATION
+//   Best first year: porkbun ($29.88)
+//   Best renewal:    porkbun ($29.88)
+//
+// 💡 Porkbun offers the best price for both first year and renewal
+```
+
 ### suggest_domains
 
 Get variations when your preferred name is taken:
@@ -194,7 +306,8 @@ Get variations when your preferred name is taken:
 {
   "base_name": "vibecoding",
   "tld": "com",
-  "max_suggestions": 5
+  "max_suggestions": 5,
+  "variants": ["prefixes", "suffixes", "hyphen", "abbreviations"]
 }
 
 // Output
@@ -208,6 +321,86 @@ Get variations when your preferred name is taken:
     "✅ Found 5 available variations",
     "⭐ Top suggestion: getvibecoding.com ($8.95/year)"
   ]
+}
+```
+
+**Handling Edge Cases:**
+
+```typescript
+// Handle scenarios when no alternatives are available
+async function getSuggestionsWithFallback(baseName: string, tld: string) {
+  try {
+    const result = await suggestDomains({
+      base_name: baseName,
+      tld: tld,
+      max_suggestions: 10,
+      variants: ["prefixes", "suffixes", "hyphen", "abbreviations", "numbers"]
+    });
+
+    // Case 1: No suggestions found
+    if (result.suggestions.length === 0) {
+      console.log(`No variations available for ${baseName}.${tld}`);
+
+      // Try different TLDs
+      const altTlds = ["io", "dev", "app", "co"].filter(t => t !== tld);
+      for (const altTld of altTlds) {
+        const altResult = await suggestDomains({
+          base_name: baseName,
+          tld: altTld,
+          max_suggestions: 5
+        });
+        if (altResult.suggestions.length > 0) {
+          return {
+            originalTld: tld,
+            alternativeTld: altTld,
+            suggestions: altResult.suggestions,
+            message: `No ${tld} available, but found options in .${altTld}`
+          };
+        }
+      }
+
+      // Try smart suggestions as last resort
+      const smartResult = await suggestDomainsSmart({
+        query: baseName,
+        tld: tld,
+        style: "short",
+        max_suggestions: 10
+      });
+      return {
+        originalTld: tld,
+        suggestions: smartResult.results.available,
+        message: "Used AI-powered suggestions for creative alternatives"
+      };
+    }
+
+    // Case 2: All suggestions are premium (expensive)
+    const affordable = result.suggestions.filter(s => s.price_first_year < 50);
+    const premium = result.suggestions.filter(s => s.price_first_year >= 50);
+
+    if (affordable.length === 0 && premium.length > 0) {
+      return {
+        suggestions: [],
+        premiumOnly: premium,
+        message: `Only premium domains available (starting at $${premium[0].price_first_year})`
+      };
+    }
+
+    return { suggestions: result.suggestions };
+
+  } catch (error) {
+    // Handle rate limiting during suggestion generation
+    if (error.code === "RATE_LIMIT") {
+      await new Promise(r => setTimeout(r, error.retryAfter * 1000));
+      return getSuggestionsWithFallback(baseName, tld);
+    }
+    throw error;
+  }
+}
+
+// Usage
+const suggestions = await getSuggestionsWithFallback("techapp", "com");
+if (suggestions.alternativeTld) {
+  console.log(suggestions.message);
 }
 ```
 
@@ -319,7 +512,206 @@ Verify username availability across 10 platforms:
 - **Smart Caching**: Taken usernames cached 24h, available 1h, errors 5min
 - **Rate Limit Handling**: Automatic 429 detection with graceful error reporting
 
+**Error Handling for check_socials:**
+
+```typescript
+// Handle various error scenarios when checking social platforms
+async function robustSocialCheck(username: string) {
+  try {
+    const result = await checkSocials({
+      name: username,
+      platforms: ["github", "twitter", "instagram", "npm", "linkedin"]
+    });
+
+    // Categorize results by confidence and availability
+    const report = {
+      definitelyAvailable: result.results
+        .filter(r => r.available && r.confidence === "high")
+        .map(r => r.platform),
+      probablyAvailable: result.results
+        .filter(r => r.available && r.confidence === "medium")
+        .map(r => r.platform),
+      definitelyTaken: result.results
+        .filter(r => !r.available && r.confidence === "high")
+        .map(r => r.platform),
+      probablyTaken: result.results
+        .filter(r => !r.available && r.confidence === "medium")
+        .map(r => r.platform),
+      checkManually: result.results
+        .filter(r => r.confidence === "low")
+        .map(r => ({ platform: r.platform, url: r.url })),
+      errors: result.results
+        .filter(r => r.error)
+        .map(r => ({ platform: r.platform, error: r.error }))
+    };
+
+    return report;
+  } catch (error) {
+    // Handle rate limiting
+    if (error.code === "RATE_LIMIT") {
+      console.log(`Rate limited. Retry after ${error.retryAfter} seconds`);
+      await new Promise(r => setTimeout(r, error.retryAfter * 1000));
+      return robustSocialCheck(username); // Retry
+    }
+
+    // Handle network errors
+    if (error.code === "TIMEOUT" || error.code === "NETWORK_ERROR") {
+      console.log("Network issue. Some platforms may not have been checked.");
+      return { error: "Partial check - network issues", platforms: [] };
+    }
+
+    throw error;
+  }
+}
+
+// Usage
+const socialReport = await robustSocialCheck("myproject");
+console.log("Secure these now:", socialReport.definitelyAvailable);
+console.log("Verify manually:", socialReport.checkManually);
+```
+
+**Confidence Levels Explained:**
+
+| Platform | Confidence | Detection Method |
+|----------|------------|------------------|
+| GitHub | High | Public API check |
+| Twitter/X | High | oembed API (v1.2.1+) |
+| npm | High | Registry API |
+| PyPI | High | Package API |
+| Reddit | High | Profile check |
+| YouTube | Medium | Channel page check |
+| ProductHunt | Medium | Profile page check |
+| Instagram | Low | Blocked by platform |
+| LinkedIn | Low | Blocked by platform |
+| TikTok | Low | Blocked by platform |
+
 ## Configuration
+
+### API Keys Setup and Benefits
+
+Domain Search MCP works without API keys using RDAP/WHOIS fallbacks, but configuring registrar API keys provides significant benefits:
+
+#### Performance Comparison: API Keys vs Fallbacks
+
+| Metric | Without API Keys | With Porkbun API | With Namecheap API |
+|--------|-----------------|------------------|-------------------|
+| **Response Time** | 2-5 seconds | 100-200ms | 150-300ms |
+| **Rate Limit** | 10-50 req/min | 1000+ req/min | 500+ req/min |
+| **Pricing Data** | Not available | Full pricing | Full pricing |
+| **Bulk Operations** | ~50 domains max | 100 domains | 100 domains |
+| **Reliability** | Varies by TLD | 99.9% uptime | 99.9% uptime |
+| **WHOIS Privacy Info** | No | Yes | Yes |
+
+#### Configuring Porkbun API (Recommended)
+
+```typescript
+// Step 1: Get free API keys from https://porkbun.com/account/api
+
+// Step 2: Add to your .env file
+PORKBUN_API_KEY=pk1_abc123...
+PORKBUN_SECRET_KEY=sk1_xyz789...
+
+// Step 3: The server automatically detects and uses these keys
+// No code changes needed - just set environment variables
+
+// Verification: Check if API keys are working
+const result = await searchDomain({
+  domain_name: "example",
+  tlds: ["com"]
+});
+
+// With API keys, you'll see:
+// - source: "porkbun_api" (not "rdap" or "whois")
+// - price_first_year: 8.95 (actual pricing)
+// - privacy_included: true (WHOIS privacy info)
+```
+
+#### Configuring Namecheap API
+
+```typescript
+// Step 1: Enable API access at https://ap.www.namecheap.com/settings/tools/apiaccess
+// Step 2: Whitelist your IP address in Namecheap dashboard
+
+// Step 3: Add to your .env file
+NAMECHEAP_API_KEY=your_api_key
+NAMECHEAP_API_USER=your_username
+NAMECHEAP_CLIENT_IP=your_whitelisted_ip  // Optional, auto-detected
+
+// The server uses Namecheap as secondary source after Porkbun
+```
+
+#### Registrar Selection Strategy
+
+The server automatically selects the best available source:
+
+```typescript
+// Priority order (highest to lowest):
+// 1. Porkbun API (if configured) - fastest, most reliable
+// 2. Namecheap API (if configured) - good alternative
+// 3. GoDaddy MCP (if available) - no API key needed, has pricing
+// 4. RDAP (always available) - fast but no pricing
+// 5. WHOIS (fallback) - slowest, rate-limited
+
+// Example: How source selection works
+const result = await searchDomain({ domain_name: "startup", tlds: ["com"] });
+
+// Result shows which source was used:
+console.log(result.results[0].source);
+// "porkbun_api" - if Porkbun keys configured
+// "namecheap_api" - if only Namecheap configured
+// "godaddy_mcp" - if GoDaddy MCP available
+// "rdap" - if no API keys, RDAP successful
+// "whois" - fallback when RDAP fails
+```
+
+#### Handling Missing API Credentials
+
+```typescript
+// The server gracefully handles missing credentials
+try {
+  const result = await searchDomain({
+    domain_name: "example",
+    tlds: ["com"]
+  });
+
+  // Check which source was used
+  if (result.results[0].source === "rdap" || result.results[0].source === "whois") {
+    console.log("Note: Using fallback. Configure API keys for pricing data.");
+  }
+
+  // Check if pricing is available
+  if (result.results[0].price_first_year === null) {
+    console.log("Pricing not available. Add Porkbun API key for pricing.");
+  }
+} catch (error) {
+  if (error.code === "AUTH_ERROR") {
+    console.log("API key invalid. Check your credentials.");
+  }
+}
+```
+
+#### Complete Configuration Example
+
+```typescript
+// Full .env configuration for optimal performance
+// ================================================
+
+// Required for pricing data (choose at least one)
+PORKBUN_API_KEY=pk1_your_key
+PORKBUN_SECRET_KEY=sk1_your_secret
+
+// Optional: Additional registrar for price comparison
+NAMECHEAP_API_KEY=your_namecheap_key
+NAMECHEAP_API_USER=your_username
+
+// Optional: Performance tuning
+CACHE_TTL_AVAILABILITY=300    // Cache results for 5 minutes
+CACHE_TTL_PRICING=3600        // Cache pricing for 1 hour
+RATE_LIMIT_PER_MINUTE=60      // Max requests per minute
+
+// Optional: Logging
+LOG_LEVEL=info                // debug | info | warn | error
+```
 
 ### Environment Variables
 
@@ -470,6 +862,81 @@ When operating without API keys, Domain Search MCP uses WHOIS and RDAP protocols
 | **RDAP** | 10-50 req/min per TLD | Returns 429 or connection refused |
 | **WHOIS** | 5-20 req/min per server | Connection timeout or ban |
 
+#### WHOIS/RDAP Protocol Details
+
+**RDAP (Registration Data Access Protocol):**
+- Modern replacement for WHOIS with JSON responses
+- Each TLD has its own RDAP server (e.g., rdap.verisign.com for .com)
+- Rate limits are per-TLD, not global
+- Supports HTTPS with structured responses
+
+```typescript
+// RDAP servers by TLD
+const rdapServers = {
+  "com": "https://rdap.verisign.com/com/v1/domain/",
+  "net": "https://rdap.verisign.com/net/v1/domain/",
+  "io": "https://rdap.nic.io/domain/",
+  "dev": "https://rdap.nic.google/domain/",
+  "app": "https://rdap.nic.google/domain/"
+};
+
+// RDAP response indicates availability
+// - 200 OK: Domain is registered (taken)
+// - 404 Not Found: Domain is available
+// - 429 Too Many Requests: Rate limited
+```
+
+**WHOIS Protocol:**
+- Legacy text-based protocol on port 43
+- Different servers have different response formats
+- Some servers ban IPs after repeated queries
+- No standard rate limit headers
+
+```typescript
+// WHOIS rate limit strategies
+const whoisStrategies = {
+  // Spread requests across time
+  delayBetweenRequests: 2000,  // 2 seconds minimum
+
+  // Use different query patterns to avoid detection
+  randomizeQueryTiming: true,
+
+  // Fallback to RDAP when WHOIS fails
+  rdapFallback: true,
+
+  // Cache responses aggressively
+  cacheTTL: 300  // 5 minutes
+};
+```
+
+#### Monitoring WHOIS/RDAP Health
+
+```typescript
+// Monitor rate limit status across sources
+async function checkSourceHealth() {
+  const sources = ["rdap", "whois", "porkbun", "namecheap"];
+  const health = {};
+
+  for (const source of sources) {
+    try {
+      const start = Date.now();
+      await searchDomain({ domain_name: "test" + Date.now(), tlds: ["com"] });
+      health[source] = {
+        status: "healthy",
+        latency: Date.now() - start
+      };
+    } catch (error) {
+      health[source] = {
+        status: error.code === "RATE_LIMIT" ? "rate_limited" : "error",
+        retryAfter: error.retryAfter || null
+      };
+    }
+  }
+
+  return health;
+}
+```
+
 ### Automatic Rate Limit Handling
 
 The server implements intelligent rate limit handling:
@@ -604,7 +1071,133 @@ try {
 
 ## Workflow Examples
 
-### Workflow 1: Domain Suggestion When Preferred Name is Taken
+### Workflow 1: Complete Domain Acquisition with Partial Availability Handling
+
+A comprehensive workflow that handles scenarios where domains are available on some registrars but not others, or when some checks succeed while others fail:
+
+```typescript
+async function completeDomainAcquisition(brandName: string) {
+  // Step 1: Run parallel checks across domains and social media
+  const [domainResults, socialResults] = await Promise.all([
+    searchDomain({
+      domain_name: brandName,
+      tlds: ["com", "io", "dev", "app", "co"]
+    }),
+    checkSocials({
+      name: brandName,
+      platforms: ["github", "twitter", "instagram", "npm", "linkedin"]
+    })
+  ]);
+
+  // Step 2: Handle partial availability - some TLDs available, some taken
+  const available = domainResults.results.filter(r => r.available && !r.error);
+  const taken = domainResults.results.filter(r => !r.available && !r.error);
+  const failed = domainResults.results.filter(r => r.error);
+
+  // Step 3: Retry failed checks with exponential backoff
+  const retriedResults = [];
+  for (const failedDomain of failed) {
+    const tld = failedDomain.domain.split('.').pop();
+    let delay = 1000;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      await new Promise(r => setTimeout(r, delay));
+      try {
+        const retry = await searchDomain({
+          domain_name: brandName,
+          tlds: [tld]
+        });
+        if (!retry.results[0].error) {
+          retriedResults.push(retry.results[0]);
+          break;
+        }
+      } catch (e) {
+        delay *= 2; // Exponential backoff
+      }
+    }
+  }
+
+  // Step 4: If preferred .com is taken, generate alternatives
+  let suggestions = [];
+  const comDomain = [...available, ...retriedResults].find(d => d.domain.endsWith('.com'));
+  if (!comDomain) {
+    const suggestResult = await suggestDomains({
+      base_name: brandName,
+      tld: "com",
+      max_suggestions: 10,
+      variants: ["prefixes", "suffixes", "hyphen"]
+    });
+    suggestions = suggestResult.suggestions;
+  }
+
+  // Step 5: Compare pricing for available domains
+  const priceComparisons = await Promise.all(
+    available.slice(0, 3).map(d => {
+      const [name, tld] = d.domain.split('.');
+      return compareRegistrars({ domain: name, tld }).catch(() => null);
+    })
+  );
+
+  // Step 6: Compile comprehensive report
+  return {
+    brandName,
+    summary: {
+      domainsChecked: domainResults.results.length,
+      available: available.length + retriedResults.length,
+      taken: taken.length,
+      failedChecks: failed.length - retriedResults.length,
+      socialsAvailable: socialResults.results.filter(r => r.available).length
+    },
+    domains: {
+      available: [...available, ...retriedResults].map(d => ({
+        domain: d.domain,
+        price: d.price_first_year,
+        registrar: d.registrar,
+        source: d.source
+      })),
+      taken: taken.map(d => d.domain),
+      alternatives: suggestions.map(s => s.domain)
+    },
+    socials: {
+      available: socialResults.results
+        .filter(r => r.available && r.confidence !== "low")
+        .map(r => r.platform),
+      taken: socialResults.results
+        .filter(r => !r.available)
+        .map(r => r.platform),
+      needsManualCheck: socialResults.results
+        .filter(r => r.confidence === "low")
+        .map(r => r.platform)
+    },
+    pricing: priceComparisons.filter(Boolean).map(p => ({
+      domain: p.domain,
+      bestPrice: p.best_first_year,
+      recommendation: p.recommendation
+    })),
+    nextSteps: generateNextSteps(available, socialResults, suggestions)
+  };
+}
+
+function generateNextSteps(available, socialResults, suggestions) {
+  const steps = [];
+  if (available.length > 0) {
+    steps.push(`Register ${available[0].domain} at ${available[0].registrar}`);
+  } else if (suggestions.length > 0) {
+    steps.push(`Consider alternative: ${suggestions[0].domain}`);
+  }
+  const availableSocials = socialResults.results.filter(r => r.available);
+  if (availableSocials.length > 0) {
+    steps.push(`Secure username on: ${availableSocials.map(r => r.platform).join(', ')}`);
+  }
+  return steps;
+}
+
+// Usage
+const acquisition = await completeDomainAcquisition("techstartup");
+// Returns comprehensive report with partial availability handled
+```
+
+### Workflow 2: Domain Suggestion When Preferred Name is Taken
 
 When a user's preferred domain is unavailable, use `suggest_domains` to find alternatives:
 
@@ -789,7 +1382,349 @@ async function robustDomainSearch(domainName: string, tlds: string[]) {
 }
 ```
 
-### Workflow 5: Domain Research Pipeline
+### Workflow 5: Bulk Validation with Compare and Suggest (100 Domains)
+
+Complete workflow that validates 100 domains using bulk_search, finds best pricing with compare_registrars for available ones, and generates alternatives for unavailable ones using suggest_domains:
+
+```typescript
+async function bulkDomainValidationPipeline(domainNames: string[], tld: string = "com") {
+  // Step 1: Bulk search all domains (handles up to 100)
+  console.log(`Checking ${domainNames.length} domains...`);
+
+  const bulkResults = await bulkSearch({
+    domains: domainNames,
+    tld: tld,
+    concurrency: 10  // Process 10 at a time for optimal speed
+  });
+
+  // Step 2: Separate available and unavailable domains
+  const available = bulkResults.results.filter(r => r.available && !r.error);
+  const unavailable = bulkResults.results.filter(r => !r.available && !r.error);
+  const errors = bulkResults.results.filter(r => r.error);
+
+  console.log(`Results: ${available.length} available, ${unavailable.length} taken, ${errors.length} errors`);
+
+  // Step 3: Compare registrar pricing for available domains (top 10)
+  const topAvailable = available
+    .sort((a, b) => (a.price_first_year || 999) - (b.price_first_year || 999))
+    .slice(0, 10);
+
+  const priceComparisons = await Promise.all(
+    topAvailable.map(async (domain) => {
+      try {
+        const name = domain.domain.replace(`.${tld}`, '');
+        const comparison = await compareRegistrars({
+          domain: name,
+          tld: tld,
+          registrars: ["porkbun", "namecheap"]
+        });
+        return { domain: domain.domain, comparison };
+      } catch (error) {
+        return { domain: domain.domain, comparison: null, error: error.message };
+      }
+    })
+  );
+
+  // Step 4: Generate alternatives for unavailable domains (top 5)
+  const topUnavailable = unavailable.slice(0, 5);
+  const alternatives = await Promise.all(
+    topUnavailable.map(async (domain) => {
+      try {
+        const name = domain.domain.replace(`.${tld}`, '');
+        const suggestions = await suggestDomains({
+          base_name: name,
+          tld: tld,
+          max_suggestions: 5,
+          variants: ["prefixes", "suffixes", "hyphen"]
+        });
+        return {
+          originalDomain: domain.domain,
+          alternatives: suggestions.suggestions
+        };
+      } catch (error) {
+        return { originalDomain: domain.domain, alternatives: [], error: error.message };
+      }
+    })
+  );
+
+  // Step 5: Compile comprehensive report
+  return {
+    summary: {
+      totalSearched: domainNames.length,
+      available: available.length,
+      unavailable: unavailable.length,
+      errors: errors.length
+    },
+    availableDomains: available.map(d => ({
+      domain: d.domain,
+      price: d.price_first_year,
+      registrar: d.registrar
+    })),
+    bestDeals: priceComparisons
+      .filter(p => p.comparison)
+      .map(p => ({
+        domain: p.domain,
+        bestFirstYear: p.comparison.best_first_year,
+        bestRenewal: p.comparison.best_renewal,
+        recommendation: p.comparison.recommendation
+      })),
+    alternativesForTaken: alternatives.filter(a => a.alternatives.length > 0),
+    failedChecks: errors.map(e => ({ domain: e.domain, error: e.error }))
+  };
+}
+
+// Usage: Validate 50 startup name ideas
+const startupNames = [
+  "techflow", "datawise", "cloudpeak", "aiforge", "bytecraft",
+  "codestream", "devpulse", "syncwave", "logiclab", "pixelcraft",
+  // ... add more names up to 100
+];
+
+const report = await bulkDomainValidationPipeline(startupNames, "io");
+console.log(`Found ${report.summary.available} available domains`);
+console.log(`Best deal: ${report.bestDeals[0]?.domain} at $${report.bestDeals[0]?.bestFirstYear?.price}`);
+```
+
+### Workflow 6: Domain Research with TLD Info (search + tld_info + suggest)
+
+A research-focused workflow using search_domain, tld_info, and suggest_domains to provide comprehensive domain options analysis:
+
+```typescript
+async function domainResearchWithTldAnalysis(baseName: string, preferredTlds: string[] = ["com", "io", "dev"]) {
+  // Step 1: Get detailed information about each TLD
+  const tldDetails = await Promise.all(
+    preferredTlds.map(async (tld) => {
+      const info = await tldInfo({ tld, detailed: true });
+      return { tld, ...info };
+    })
+  );
+
+  // Step 2: Search domain availability across all TLDs
+  const searchResults = await searchDomain({
+    domain_name: baseName,
+    tlds: preferredTlds
+  });
+
+  // Step 3: For each unavailable TLD, generate suggestions
+  const unavailableTlds = searchResults.results
+    .filter(r => !r.available)
+    .map(r => r.domain.split('.').pop());
+
+  const suggestions = {};
+  for (const tld of unavailableTlds) {
+    try {
+      const result = await suggestDomains({
+        base_name: baseName,
+        tld: tld,
+        max_suggestions: 5,
+        variants: ["prefixes", "suffixes"]
+      });
+      suggestions[tld] = result.suggestions;
+    } catch (error) {
+      suggestions[tld] = [];
+    }
+  }
+
+  // Step 4: Compile research report with TLD context
+  return {
+    baseName,
+    tldAnalysis: tldDetails.map(tld => ({
+      tld: tld.tld,
+      description: tld.description,
+      typicalUse: tld.typical_use,
+      priceRange: tld.price_range,
+      restrictions: tld.restrictions || [],
+      popularity: tld.popularity,
+      recommendation: tld.recommendation
+    })),
+    availability: searchResults.results.map(r => ({
+      domain: r.domain,
+      available: r.available,
+      price: r.price_first_year,
+      tldInfo: tldDetails.find(t => r.domain.endsWith(`.${t.tld}`))
+    })),
+    suggestions: Object.entries(suggestions).map(([tld, suggs]) => ({
+      forTld: tld,
+      alternatives: suggs.map(s => s.domain)
+    })),
+    recommendation: generateTldRecommendation(searchResults.results, tldDetails)
+  };
+}
+
+function generateTldRecommendation(results, tldDetails) {
+  const available = results.filter(r => r.available);
+  if (available.length === 0) {
+    return "No preferred TLDs available. Consider the suggested alternatives.";
+  }
+
+  const cheapest = available.sort((a, b) => a.price_first_year - b.price_first_year)[0];
+  const tldInfo = tldDetails.find(t => cheapest.domain.endsWith(`.${t.tld}`));
+
+  return `Recommended: ${cheapest.domain} ($${cheapest.price_first_year}/yr) - ${tldInfo?.recommendation || 'Good choice'}`;
+}
+
+// Usage
+const research = await domainResearchWithTldAnalysis("myproject", ["com", "io", "dev", "app"]);
+console.log(research.recommendation);
+// Output: "Recommended: myproject.com ($8.95/yr) - Classic, universal choice"
+```
+
+### Workflow 7: Validate 50 Domains with Result Aggregation
+
+End-to-end workflow for validating exactly 50 domain names with comprehensive result handling:
+
+```typescript
+async function validate50Domains(domainNames: string[], tld: string = "com") {
+  // Ensure we have exactly 50 domains
+  const domains = domainNames.slice(0, 50);
+  if (domains.length < 50) {
+    console.log(`Note: Only ${domains.length} domains provided`);
+  }
+
+  console.log(`Starting validation of ${domains.length} domains...`);
+  const startTime = Date.now();
+
+  // Step 1: Bulk search with optimized concurrency
+  const bulkResult = await bulkSearch({
+    domains: domains,
+    tld: tld,
+    concurrency: 10  // Optimal for rate limit avoidance
+  });
+
+  // Step 2: Aggregate results by status
+  const aggregation = {
+    available: [],
+    taken: [],
+    errors: [],
+    bySource: {},
+    byPrice: { under10: [], under25: [], under50: [], premium: [] }
+  };
+
+  for (const result of bulkResult.results) {
+    // Categorize by availability
+    if (result.error) {
+      aggregation.errors.push({
+        domain: result.domain,
+        error: result.error,
+        retryable: result.retryable || false
+      });
+    } else if (result.available) {
+      aggregation.available.push(result);
+
+      // Categorize by price
+      const price = result.price_first_year;
+      if (price && price < 10) aggregation.byPrice.under10.push(result);
+      else if (price && price < 25) aggregation.byPrice.under25.push(result);
+      else if (price && price < 50) aggregation.byPrice.under50.push(result);
+      else if (price) aggregation.byPrice.premium.push(result);
+    } else {
+      aggregation.taken.push(result);
+    }
+
+    // Track by source
+    const source = result.source || "unknown";
+    if (!aggregation.bySource[source]) {
+      aggregation.bySource[source] = { count: 0, avgLatency: 0 };
+    }
+    aggregation.bySource[source].count++;
+  }
+
+  // Step 3: Retry failed domains with exponential backoff
+  if (aggregation.errors.length > 0) {
+    console.log(`Retrying ${aggregation.errors.length} failed domains...`);
+
+    const retryResults = [];
+    for (const failed of aggregation.errors.filter(e => e.retryable)) {
+      const domainName = failed.domain.replace(`.${tld}`, '');
+      let delay = 2000;
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await new Promise(r => setTimeout(r, delay));
+        try {
+          const retry = await searchDomain({
+            domain_name: domainName,
+            tlds: [tld]
+          });
+          if (!retry.results[0].error) {
+            retryResults.push(retry.results[0]);
+            // Remove from errors, add to appropriate category
+            const idx = aggregation.errors.findIndex(e => e.domain === failed.domain);
+            if (idx > -1) aggregation.errors.splice(idx, 1);
+            if (retry.results[0].available) {
+              aggregation.available.push(retry.results[0]);
+            } else {
+              aggregation.taken.push(retry.results[0]);
+            }
+            break;
+          }
+        } catch (e) {
+          delay *= 2;
+        }
+      }
+    }
+  }
+
+  // Step 4: Generate summary report
+  const duration = Date.now() - startTime;
+  const report = {
+    summary: {
+      totalDomains: domains.length,
+      available: aggregation.available.length,
+      taken: aggregation.taken.length,
+      errors: aggregation.errors.length,
+      duration: `${(duration / 1000).toFixed(1)}s`,
+      avgTimePerDomain: `${(duration / domains.length).toFixed(0)}ms`
+    },
+    availableDomains: aggregation.available
+      .sort((a, b) => (a.price_first_year || 999) - (b.price_first_year || 999))
+      .map(d => ({
+        domain: d.domain,
+        price: d.price_first_year,
+        registrar: d.registrar,
+        source: d.source
+      })),
+    priceBreakdown: {
+      budget: aggregation.byPrice.under10.map(d => d.domain),
+      moderate: aggregation.byPrice.under25.map(d => d.domain),
+      standard: aggregation.byPrice.under50.map(d => d.domain),
+      premium: aggregation.byPrice.premium.map(d => d.domain)
+    },
+    sourceStats: aggregation.bySource,
+    takenDomains: aggregation.taken.map(d => d.domain),
+    failedChecks: aggregation.errors
+  };
+
+  return report;
+}
+
+// Usage: Validate 50 startup name ideas
+const startupIdeas = [
+  "codeforge", "devpulse", "techwave", "dataflow", "cloudpeak",
+  "aibridge", "synclab", "bytecraft", "logicbox", "pixelsmith",
+  "neuralnet", "quantumbit", "cyberlink", "smartnode", "deepcore",
+  "faststack", "cleancode", "agiledev", "swiftbyte", "codestream",
+  "datawise", "techspark", "cloudsync", "aistack", "devforge",
+  "bytewise", "logicflow", "pixelwave", "neuralhub", "quantumai",
+  "cyberpulse", "smartflow", "deeptech", "fastcode", "cleanstack",
+  "agilebit", "swiftdev", "streamcode", "wisebyte", "sparktech",
+  "syncwave", "forgeai", "pulsedev", "wavetech", "flowdata",
+  "peakcloud", "bridgeai", "labsync", "craftbyte", "boxlogic"
+];
+
+const report = await validate50Domains(startupIdeas, "io");
+
+console.log(`\n=== 50 DOMAIN VALIDATION REPORT ===`);
+console.log(`Completed in ${report.summary.duration}`);
+console.log(`Available: ${report.summary.available} | Taken: ${report.summary.taken} | Errors: ${report.summary.errors}`);
+console.log(`\nBest deals (under $10):`);
+report.priceBreakdown.budget.forEach(d => console.log(`  ${d}`));
+console.log(`\nTop 5 available domains:`);
+report.availableDomains.slice(0, 5).forEach(d =>
+  console.log(`  ${d.domain} - $${d.price}/yr (${d.registrar})`)
+);
+```
+
+### Workflow 8: Domain Research Pipeline
 
 Comprehensive domain research combining multiple tools:
 
