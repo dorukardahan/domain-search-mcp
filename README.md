@@ -451,6 +451,393 @@ The server provides user-friendly error messages with suggested actions:
 | `NO_SOURCE_AVAILABLE` | All sources failed | Yes |
 | `TIMEOUT` | Request timed out | Yes |
 
+## Rate Limiting & Performance Optimization
+
+### Understanding WHOIS/RDAP Rate Limits
+
+When operating without API keys, Domain Search MCP uses WHOIS and RDAP protocols as fallbacks. These protocols have important rate limiting considerations:
+
+| Protocol | Typical Rate Limit | Behavior When Exceeded |
+|----------|-------------------|------------------------|
+| **RDAP** | 10-50 req/min per TLD | Returns 429 or connection refused |
+| **WHOIS** | 5-20 req/min per server | Connection timeout or ban |
+
+### Automatic Rate Limit Handling
+
+The server implements intelligent rate limit handling:
+
+```typescript
+// Built-in protections
+{
+  // Automatic exponential backoff
+  retryStrategy: {
+    initialDelay: 1000,      // Start with 1 second
+    maxDelay: 30000,         // Cap at 30 seconds
+    backoffMultiplier: 2,    // Double each retry
+    maxRetries: 3            // Give up after 3 attempts
+  },
+
+  // Per-source rate limiting
+  rateLimits: {
+    rdap: { requestsPerMinute: 30, burstLimit: 5 },
+    whois: { requestsPerMinute: 10, burstLimit: 3 }
+  }
+}
+```
+
+### Strategies for High-Volume Searches
+
+When performing bulk searches without API keys, use these optimization strategies:
+
+#### 1. Use Caching Effectively
+
+```typescript
+// Results are cached automatically
+// - Availability: 5 minutes (CACHE_TTL_AVAILABILITY)
+// - Pricing: 1 hour (CACHE_TTL_PRICING)
+// - TLD info: 24 hours
+
+// Subsequent checks for the same domain are instant
+const first = await searchDomain("example.com");  // API call
+const second = await searchDomain("example.com"); // Cache hit (no API call)
+```
+
+#### 2. Batch Domains by TLD
+
+```typescript
+// GOOD: Group by TLD to minimize server switches
+const comDomains = ["app1", "app2", "app3"];
+const ioDomains = ["startup1", "startup2"];
+
+await bulkSearch({ domains: comDomains, tld: "com" }); // One .com server
+await bulkSearch({ domains: ioDomains, tld: "io" });   // One .io server
+
+// BAD: Mixed TLDs cause more server connections
+await Promise.all([
+  searchDomain("app1.com"),
+  searchDomain("startup1.io"),
+  searchDomain("app2.com"),  // Back to .com server
+]);
+```
+
+#### 3. Control Concurrency
+
+```typescript
+// bulk_search has built-in concurrency control
+{
+  "domains": ["name1", "name2", ..., "name50"],
+  "tld": "com",
+  "concurrency": 5  // Process 5 at a time (default)
+}
+```
+
+#### 4. Implement Request Queuing
+
+For very high volumes, implement client-side queuing:
+
+```typescript
+// Example: Rate-limited queue for 100+ domains
+async function queuedBulkSearch(domains: string[], tld: string) {
+  const BATCH_SIZE = 25;
+  const DELAY_BETWEEN_BATCHES = 5000; // 5 seconds
+
+  const results = [];
+  for (let i = 0; i < domains.length; i += BATCH_SIZE) {
+    const batch = domains.slice(i, i + BATCH_SIZE);
+    const batchResults = await bulkSearch({ domains: batch, tld });
+    results.push(...batchResults.results);
+
+    // Wait between batches to avoid rate limits
+    if (i + BATCH_SIZE < domains.length) {
+      await new Promise(r => setTimeout(r, DELAY_BETWEEN_BATCHES));
+    }
+  }
+  return results;
+}
+```
+
+### Why API Keys Are Recommended
+
+| Feature | Without API Keys | With API Keys |
+|---------|-----------------|---------------|
+| Speed | 2-5 sec/domain | 100-200ms/domain |
+| Rate Limits | Strict (10-50/min) | Generous (1000+/min) |
+| Pricing Data | Not available | Full pricing info |
+| Reliability | Varies by server | Consistent |
+| Bulk Operations | Limited to ~50/batch | Up to 100/batch |
+
+### Handling Rate Limit Errors
+
+```typescript
+// The server returns structured errors for rate limits
+{
+  "error": true,
+  "code": "RATE_LIMIT",
+  "message": "WHOIS rate limit exceeded for .com TLD",
+  "retryable": true,
+  "retryAfter": 30,  // Seconds to wait
+  "suggestedAction": "Wait 30 seconds or use Porkbun API for faster results"
+}
+
+// Your code should handle these gracefully
+try {
+  const result = await searchDomain("example.com");
+} catch (error) {
+  if (error.code === "RATE_LIMIT" && error.retryable) {
+    await sleep(error.retryAfter * 1000);
+    return searchDomain("example.com"); // Retry
+  }
+  throw error;
+}
+```
+
+## Workflow Examples
+
+### Workflow 1: Domain Suggestion When Preferred Name is Taken
+
+When a user's preferred domain is unavailable, use `suggest_domains` to find alternatives:
+
+```typescript
+// Step 1: Check if preferred domain is available
+const preferred = await searchDomain({
+  domain_name: "techapp",
+  tlds: ["com"]
+});
+
+// Step 2: If taken, generate suggestions
+if (!preferred.results[0].available) {
+  const suggestions = await suggestDomains({
+    base_name: "techapp",
+    tld: "com",
+    max_suggestions: 10,
+    variants: ["prefixes", "suffixes", "hyphen", "abbreviations"]
+  });
+
+  // Step 3: Present alternatives to user
+  console.log("techapp.com is taken. Available alternatives:");
+  suggestions.suggestions.forEach(s => {
+    console.log(`  ${s.domain} - $${s.price_first_year}/year`);
+  });
+
+  // Output:
+  // techapp.com is taken. Available alternatives:
+  //   gettechapp.com - $8.95/year
+  //   techappnow.com - $8.95/year
+  //   techapp-io.com - $8.95/year
+  //   mytechapp.com - $8.95/year
+}
+```
+
+### Workflow 2: Simultaneous Social Media Verification
+
+Check username availability across multiple platforms at once:
+
+```typescript
+// Check if "myproject" is available on GitHub, Twitter, and Instagram
+const socialCheck = await checkSocials({
+  name: "myproject",
+  platforms: ["github", "twitter", "instagram"]
+});
+
+// Handle results by confidence level
+const highConfidence = socialCheck.results.filter(r => r.confidence === "high");
+const mediumConfidence = socialCheck.results.filter(r => r.confidence === "medium");
+const lowConfidence = socialCheck.results.filter(r => r.confidence === "low");
+
+// Report findings
+console.log("Verified available:", highConfidence.filter(r => r.available).map(r => r.platform));
+console.log("Likely available:", mediumConfidence.filter(r => r.available).map(r => r.platform));
+console.log("Check manually:", lowConfidence.map(r => r.platform));
+
+// Output:
+// Verified available: ["github"]
+// Likely available: ["twitter"]
+// Check manually: ["instagram"]
+```
+
+### Workflow 3: Complete Brand Validation Pipeline
+
+Comprehensive brand name validation across domains and social media:
+
+```typescript
+async function validateBrandName(brandName: string) {
+  // Run domain and social checks in parallel
+  const [domainResults, socialResults] = await Promise.all([
+    searchDomain({
+      domain_name: brandName,
+      tlds: ["com", "io", "dev", "app"]
+    }),
+    checkSocials({
+      name: brandName,
+      platforms: ["github", "twitter", "instagram", "linkedin"]
+    })
+  ]);
+
+  // Analyze domain availability
+  const availableDomains = domainResults.results.filter(r => r.available);
+  const bestDomain = availableDomains.sort((a, b) =>
+    a.price_first_year - b.price_first_year
+  )[0];
+
+  // Analyze social availability
+  const availableSocials = socialResults.results.filter(r =>
+    r.available && r.confidence !== "low"
+  );
+
+  // Calculate brand score
+  const domainScore = availableDomains.length / domainResults.results.length;
+  const socialScore = availableSocials.length / socialResults.results.length;
+  const overallScore = (domainScore + socialScore) / 2;
+
+  return {
+    brandName,
+    overallScore: Math.round(overallScore * 100),
+    domains: {
+      available: availableDomains.map(d => d.domain),
+      bestOption: bestDomain?.domain,
+      bestPrice: bestDomain?.price_first_year
+    },
+    socials: {
+      available: availableSocials.map(s => s.platform),
+      needsManualCheck: socialResults.results
+        .filter(r => r.confidence === "low")
+        .map(s => s.platform)
+    },
+    recommendation: overallScore > 0.7
+      ? "Strong brand availability - proceed with registration"
+      : overallScore > 0.4
+      ? "Partial availability - consider alternatives"
+      : "Limited availability - try a different name"
+  };
+}
+
+// Usage
+const result = await validateBrandName("vibecoding");
+// Output:
+// {
+//   brandName: "vibecoding",
+//   overallScore: 85,
+//   domains: {
+//     available: ["vibecoding.com", "vibecoding.io", "vibecoding.dev"],
+//     bestOption: "vibecoding.com",
+//     bestPrice: 8.95
+//   },
+//   socials: {
+//     available: ["github", "twitter"],
+//     needsManualCheck: ["instagram", "linkedin"]
+//   },
+//   recommendation: "Strong brand availability - proceed with registration"
+// }
+```
+
+### Workflow 4: Handling Partial Availability Scenarios
+
+When some sources succeed and others fail:
+
+```typescript
+async function robustDomainSearch(domainName: string, tlds: string[]) {
+  const results = await searchDomain({ domain_name: domainName, tlds });
+
+  // Separate successful and failed checks
+  const successful = results.results.filter(r => !r.error);
+  const failed = results.results.filter(r => r.error);
+
+  // Handle partial failures
+  if (failed.length > 0) {
+    console.log(`Warning: ${failed.length} TLDs could not be checked:`);
+    failed.forEach(f => console.log(`  ${f.domain}: ${f.error}`));
+
+    // Retry failed ones with exponential backoff
+    for (const failedResult of failed) {
+      const tld = failedResult.domain.split('.').pop();
+      let retryDelay = 1000;
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await new Promise(r => setTimeout(r, retryDelay));
+        try {
+          const retry = await searchDomain({
+            domain_name: domainName,
+            tlds: [tld]
+          });
+          if (!retry.results[0].error) {
+            successful.push(retry.results[0]);
+            break;
+          }
+        } catch (e) {
+          retryDelay *= 2; // Exponential backoff
+        }
+      }
+    }
+  }
+
+  return {
+    results: successful,
+    partialFailure: failed.length > 0,
+    failedTlds: failed.map(f => f.domain.split('.').pop())
+  };
+}
+```
+
+### Workflow 5: Domain Research Pipeline
+
+Comprehensive domain research combining multiple tools:
+
+```typescript
+async function domainResearchPipeline(businessIdea: string) {
+  // Step 1: Generate smart suggestions from business description
+  const suggestions = await suggestDomainsSmart({
+    query: businessIdea,
+    tld: "com",
+    style: "brandable",
+    max_suggestions: 15
+  });
+
+  // Step 2: Get TLD information for context
+  const tldInfo = await getTldInfo({ tld: "com", detailed: true });
+
+  // Step 3: For top suggestions, compare registrar pricing
+  const topDomains = suggestions.results.available.slice(0, 5);
+  const priceComparisons = await Promise.all(
+    topDomains.map(d => compareRegistrars({
+      domain: d.domain.replace('.com', ''),
+      tld: "com"
+    }))
+  );
+
+  // Step 4: Check social media for top picks
+  const socialChecks = await Promise.all(
+    topDomains.slice(0, 3).map(d => {
+      const name = d.domain.replace('.com', '');
+      return checkSocials({
+        name,
+        platforms: ["github", "twitter", "npm"]
+      });
+    })
+  );
+
+  // Compile research report
+  return {
+    businessIdea,
+    tldContext: {
+      description: tldInfo.description,
+      priceRange: tldInfo.price_range,
+      recommendation: tldInfo.recommendation
+    },
+    topRecommendations: topDomains.map((d, i) => ({
+      domain: d.domain,
+      price: d.price_first_year,
+      bestRegistrar: priceComparisons[i]?.best_first_year?.registrar,
+      socialAvailability: socialChecks[i]?.summary
+    })),
+    allSuggestions: suggestions.results.available,
+    relatedTerms: suggestions.related_terms
+  };
+}
+
+// Usage
+const research = await domainResearchPipeline("ai-powered code review tool");
+```
+
 ## Security
 
 - API keys are never logged (automatic secret masking)
