@@ -1,15 +1,15 @@
 {
   "name": "domain-search-mcp",
-  "version": "1.2.14",
+  "version": "1.2.15",
   "mcpName": "io.github.dorukardahan/domain-search-mcp",
   "description": "Fast domain availability aggregator MCP server. Check availability across Porkbun, Namecheap, RDAP, and WHOIS. Compare pricing. Get suggestions.",
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
   "bin": {
-    "domain-search-mcp": "./dist/server.js"
+    "domain-search-mcp": "bin/domain-search-mcp"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run clean && tsc",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "test": "jest",

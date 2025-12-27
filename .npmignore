@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# Build artifacts (keep dist/ in package)
+*.tsbuildinfo
 
 # Environment files (contain secrets!)
 .env
@@ -30,12 +30,6 @@ coverage/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache
-.npm
 
 # Temporary files
 tmp/
