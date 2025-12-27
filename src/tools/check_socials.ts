@@ -112,14 +112,15 @@ const PLATFORM_CONFIGS: Record<SocialPlatform, PlatformConfig> = {
   // MEDIUM CONFIDENCE (Status codes, some edge cases)
   // ─────────────────────────────────────────────────────────────────────────
   twitter: {
-    url: 'https://twitter.com/{}',
+    // Use oembed API - Twitter SPA returns 200 for all direct requests
+    url: 'https://publish.twitter.com/oembed?url=https://twitter.com/{}',
     profileUrl: 'https://twitter.com/{}',
     errorType: 'status_code',
     errorCode: 404,
-    confidence: 'medium',
-    method: 'HEAD',
+    confidence: 'high', // oembed API is reliable
+    method: 'GET',
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      'User-Agent': 'Domain-Search-MCP/1.0',
     },
     regexCheck: /^[A-Za-z0-9_]{1,15}$/,
   },
@@ -226,8 +227,8 @@ export const checkSocialsTool = {
   description: `Check if a username is available on social media and developer platforms.
 
 Supports 10 platforms with varying confidence levels:
-- HIGH: GitHub, npm, PyPI, Reddit (reliable public APIs)
-- MEDIUM: Twitter/X, YouTube, ProductHunt (status code based)
+- HIGH: GitHub, npm, PyPI, Reddit, Twitter/X (reliable public APIs)
+- MEDIUM: YouTube, ProductHunt (status code based)
 - LOW: Instagram, LinkedIn, TikTok (block automated checks - verify manually)
 
 Returns availability status with confidence indicator.
