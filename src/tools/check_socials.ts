@@ -15,6 +15,23 @@ import axios from 'axios';
 import type { SocialPlatform, SocialHandleResult } from '../types.js';
 import { wrapError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
+import { TtlCache } from '../utils/cache.js';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Cache Configuration
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Cache for social handle results.
+ * - Taken usernames: cached 24 hours (rarely become available)
+ * - Available usernames: cached 1 hour (might be taken soon)
+ * - Errors: cached 5 minutes (retry soon)
+ */
+const CACHE_TTL_TAKEN = 86400; // 24 hours
+const CACHE_TTL_AVAILABLE = 3600; // 1 hour
+const CACHE_TTL_ERROR = 300; // 5 minutes
+
+const socialCache = new TtlCache<SocialHandleResult>(CACHE_TTL_TAKEN, 5000);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Platform Configuration (Sherlock-style)
@@ -271,6 +288,14 @@ async function checkPlatform(
   const config = PLATFORM_CONFIGS[platform];
   const url = config.url.replace('{}', username);
   const profileUrl = config.profileUrl.replace('{}', username);
+  const cacheKey = `${platform}:${username.toLowerCase()}`;
+
+  // Check cache first to reduce API calls
+  const cached = socialCache.get(cacheKey);
+  if (cached) {
+    logger.debug(`Cache hit for ${platform}:${username}`);
+    return { ...cached, checked_at: cached.checked_at + ' (cached)' };
+  }
 
   // Validate username format if regex provided
   if (config.regexCheck && !config.regexCheck.test(username)) {
@@ -299,7 +324,7 @@ async function checkPlatform(
     // Handle rate limiting (429) - return uncertain instead of false negative
     if (response.status === 429) {
       logger.debug(`Rate limited on ${platform}`, { username });
-      return {
+      const rateLimitResult: SocialHandleResult = {
         platform,
         handle: username,
         available: false,
@@ -308,6 +333,9 @@ async function checkPlatform(
         confidence: 'low', // Can't be sure due to rate limit
         error: 'Rate limited - please try again later',
       };
+      // Cache rate limit errors briefly
+      socialCache.set(cacheKey, rateLimitResult, CACHE_TTL_ERROR);
+      return rateLimitResult;
     }
 
     let available = false;
@@ -335,7 +363,7 @@ async function checkPlatform(
         break;
     }
 
-    return {
+    const result: SocialHandleResult = {
       platform,
       handle: username,
       available,
@@ -343,6 +371,13 @@ async function checkPlatform(
       checked_at: new Date().toISOString(),
       confidence: config.confidence,
     };
+
+    // Cache result with appropriate TTL
+    const ttl = available ? CACHE_TTL_AVAILABLE : CACHE_TTL_TAKEN;
+    socialCache.set(cacheKey, result, ttl);
+    logger.debug(`Cached ${platform}:${username} for ${ttl}s`);
+
+    return result;
   } catch (error) {
     logger.debug(`Failed to check ${platform}`, {
       username,
@@ -350,7 +385,7 @@ async function checkPlatform(
     });
 
     // Return uncertain result on error
-    return {
+    const errorResult: SocialHandleResult = {
       platform,
       handle: username,
       available: false, // Assume taken if we can't check
@@ -359,6 +394,11 @@ async function checkPlatform(
       confidence: 'low',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
+
+    // Cache errors briefly to avoid hammering failing endpoints
+    socialCache.set(cacheKey, errorResult, CACHE_TTL_ERROR);
+
+    return errorResult;
   }
 }
 
