@@ -38,7 +38,9 @@ export class TtlCache<T> {
     this.maxSize = maxSize;
 
     // Clean up expired entries every minute
+    // .unref() prevents this interval from keeping the process alive
     this.cleanupInterval = setInterval(() => this.cleanup(), 60000);
+    this.cleanupInterval.unref();
   }
 
   /**
