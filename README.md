@@ -89,6 +89,7 @@ nano .env
 |-----------|----------|---------|-------|
 | **Porkbun** | JSON | Free | Fast, includes WHOIS privacy |
 | **Namecheap** | XML | Free | Requires IP whitelist |
+| **GoDaddy** | MCP | Free | Via GoDaddy MCP server (no API key needed) |
 
 ### Fallback Protocols
 
@@ -257,6 +258,7 @@ AI-powered domain suggestions using semantic analysis:
 ```
 
 **Features:**
+- **Dual-Source Suggestions**: Combines semantic analysis + GoDaddy AI recommendations
 - Understands natural language queries ("coffee shop in seattle")
 - Auto-detects industry for contextual suggestions
 - Generates portmanteau/blended names
@@ -404,7 +406,8 @@ domain-search-mcp/
 │   ├── registrars/         # Registrar adapters
 │   │   ├── base.ts
 │   │   ├── porkbun.ts
-│   │   └── namecheap.ts
+│   │   ├── namecheap.ts
+│   │   └── godaddy-mcp.ts  # GoDaddy via MCP server
 │   ├── fallbacks/          # RDAP and WHOIS fallbacks
 │   │   ├── rdap.ts
 │   │   └── whois.ts
@@ -558,13 +561,16 @@ async function queuedBulkSearch(domains: string[], tld: string) {
 
 ### Why API Keys Are Recommended
 
-| Feature | Without API Keys | With API Keys |
-|---------|-----------------|---------------|
-| Speed | 2-5 sec/domain | 100-200ms/domain |
-| Rate Limits | Strict (10-50/min) | Generous (1000+/min) |
-| Pricing Data | Not available | Full pricing info |
-| Reliability | Varies by server | Consistent |
-| Bulk Operations | Limited to ~50/batch | Up to 100/batch |
+| Feature | Without API Keys | With API Keys | With GoDaddy MCP |
+|---------|-----------------|---------------|------------------|
+| Speed | 2-5 sec/domain | 100-200ms/domain | 200-500ms/domain |
+| Rate Limits | Strict (10-50/min) | Generous (1000+/min) | Moderate |
+| Pricing Data | Not available | Full pricing info | Full pricing info |
+| Reliability | Varies by server | Consistent | Consistent |
+| Bulk Operations | Limited to ~50/batch | Up to 100/batch | Supported |
+| Setup Required | None | API key setup | MCP server only |
+
+> **Tip**: GoDaddy MCP provides a middle ground - no API key needed but still gives pricing data!
 
 ### Handling Rate Limit Errors
 
