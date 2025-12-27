@@ -507,7 +507,7 @@ Verify username availability across 10 platforms:
 }
 ```
 
-**v1.2.1 Improvements:**
+**v1.2.2 Improvements:**
 - **Twitter**: Uses oembed API for reliable detection (no more false positives)
 - **Smart Caching**: Taken usernames cached 24h, available 1h, errors 5min
 - **Rate Limit Handling**: Automatic 429 detection with graceful error reporting
