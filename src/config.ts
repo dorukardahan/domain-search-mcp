@@ -116,7 +116,7 @@ export function getAvailableSources(): string[] {
   const sources: string[] = [];
   if (config.porkbun.enabled) sources.push('porkbun');
   if (config.namecheap.enabled) sources.push('namecheap');
-  sources.push('godaddy'); // GoDaddy MCP - always available (no auth needed)
+  sources.push('godaddy'); // GoDaddy public endpoint - always available (no auth needed)
   sources.push('rdap', 'whois'); // Always available as fallbacks
   return sources;
 }

@@ -41,7 +41,7 @@ The server automatically selects the best available source:
 
 1. **Porkbun API** - If configured (fastest, with pricing)
 2. **Namecheap API** - If configured
-3. **GoDaddy MCP** - Always available (no auth needed)
+3. **GoDaddy public endpoint** - Always available (no auth needed)
 4. **RDAP** - Fallback (fast, no pricing)
 5. **WHOIS** - Last resort (slow)
 

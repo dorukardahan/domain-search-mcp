@@ -155,7 +155,7 @@ PORKBUN_API_SECRET=sk1_xxx
 |--------|-------|---------|---------------|
 | Porkbun API | Fast | Yes | API key |
 | Namecheap API | Fast | Yes | API key + IP whitelist |
-| GoDaddy MCP | Medium | Yes | None |
+| GoDaddy public endpoint | Medium | No | None |
 | RDAP | Medium | No | None |
 | WHOIS | Slow | No | None |
 

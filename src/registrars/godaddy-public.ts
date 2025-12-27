@@ -1,11 +1,11 @@
 /**
- * GoDaddy MCP Adapter.
+ * GoDaddy Public Endpoint Adapter.
  *
- * Uses GoDaddy's public MCP endpoint for domain availability checks.
+ * Uses GoDaddy's public endpoint for domain availability checks.
  * No API key or reseller account required!
  *
  * Endpoint: https://api.godaddy.com/v1/domains/mcp
- * Protocol: JSON-RPC 2.0 over HTTP (Streamable HTTP transport)
+ * Protocol: JSON-RPC 2.0 over HTTP (SSE response)
  *
  * Features:
  * - Free availability checking (no auth)
@@ -24,9 +24,9 @@ import { logger } from '../utils/logger.js';
 import { RegistrarApiError } from '../utils/errors.js';
 
 /**
- * GoDaddy MCP endpoint.
+ * GoDaddy public endpoint.
  */
-const GODADDY_MCP_ENDPOINT = 'https://api.godaddy.com/v1/domains/mcp';
+const GODADDY_PUBLIC_ENDPOINT = 'https://api.godaddy.com/v1/domains/mcp';
 
 /**
  * JSON-RPC request ID counter.
@@ -34,9 +34,9 @@ const GODADDY_MCP_ENDPOINT = 'https://api.godaddy.com/v1/domains/mcp';
 let jsonRpcId = 1;
 
 /**
- * Response schema for MCP tool call.
+ * Response schema for GoDaddy JSON-RPC tool call.
  */
-const McpResponseSchema = z.object({
+const GoDaddyRpcResponseSchema = z.object({
   jsonrpc: z.literal('2.0'),
   id: z.number(),
   result: z.object({
@@ -53,7 +53,7 @@ const McpResponseSchema = z.object({
 });
 
 /**
- * Parse availability from GoDaddy MCP text response.
+ * Parse availability from GoDaddy public endpoint text response.
  * The response is markdown-formatted text with different formats for single vs bulk queries.
  */
 export interface ParsedAvailability {
@@ -73,7 +73,7 @@ export interface GodaddySuggestion {
 }
 
 /**
- * Parse suggestions from GoDaddy MCP domains_suggest response.
+ * Parse suggestions from GoDaddy public domains_suggest response.
  * Response format varies but typically includes categorized domain lists.
  */
 function parseSuggestResponse(text: string): GodaddySuggestion[] {
@@ -282,11 +282,11 @@ function parseAvailabilityResponse(text: string, domain: string): ParsedAvailabi
 }
 
 /**
- * GoDaddy MCP Adapter.
+ * GoDaddy public endpoint adapter.
  *
- * Uses GoDaddy's public MCP endpoint - no authentication required!
+ * Uses GoDaddy's public endpoint - no authentication required!
  */
-export class GodaddyMcpAdapter extends RegistrarAdapter {
+export class GodaddyPublicAdapter extends RegistrarAdapter {
   readonly name = 'GoDaddy';
   readonly id = 'godaddy';
 
@@ -297,7 +297,7 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
   }
 
   /**
-   * Check if GoDaddy MCP is enabled.
+   * Check if GoDaddy public endpoint is enabled.
    * Always enabled since no API key needed!
    */
   isEnabled(): boolean {
@@ -305,13 +305,13 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
   }
 
   /**
-   * Search for domain availability using GoDaddy MCP.
+   * Search for domain availability using GoDaddy public endpoint.
    */
   async search(domain: string, tld: string): Promise<DomainResult> {
     const fullDomain = `${domain}.${tld}`;
 
     return this.retryWithBackoff(async () => {
-      const text = await this.callMcpTool('domains_check_availability', {
+      const text = await this.callPublicTool('domains_check_availability', {
         domains: fullDomain,
       });
 
@@ -320,7 +320,7 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
       return this.createResult(domain, tld, {
         available: parsed.available,
         premium: parsed.premium,
-        price_first_year: null, // GoDaddy MCP doesn't provide pricing
+        price_first_year: null, // GoDaddy public endpoint doesn't provide pricing
         price_renewal: null,
         privacy_included: false, // Unknown
         source: 'godaddy_api',
@@ -335,7 +335,7 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
 
   /**
    * Bulk check multiple domains at once.
-   * GoDaddy MCP supports up to 1000 domains per request!
+   * GoDaddy public endpoint supports up to 1000 domains per request.
    */
   async bulkSearch(domains: string[]): Promise<Map<string, ParsedAvailability>> {
     const results = new Map<string, ParsedAvailability>();
@@ -343,7 +343,7 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
     // GoDaddy accepts comma-separated domains
     const domainList = domains.join(', ');
 
-    const text = await this.callMcpTool('domains_check_availability', {
+    const text = await this.callPublicTool('domains_check_availability', {
       domains: domainList,
     });
 
@@ -357,15 +357,15 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
   }
 
   /**
-   * Get TLD info - not supported by GoDaddy MCP.
+   * Get TLD info - not supported by GoDaddy public endpoint.
    */
   async getTldInfo(_tld: string): Promise<TLDInfo | null> {
     return null;
   }
 
   /**
-   * Get domain suggestions from GoDaddy MCP.
-   * Uses their domains_suggest tool for AI-powered suggestions.
+   * Get domain suggestions from GoDaddy public endpoint.
+   * Uses their domains_suggest tool for suggestion results.
    *
    * @param query - Keywords or business description (e.g., "sustainable fashion")
    * @param options - Optional parameters for suggestion customization
@@ -387,7 +387,7 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
         fullQuery = `${query} (prefer .${tlds.join(', .')})`;
       }
 
-      const text = await this.callMcpTool('domains_suggest', {
+      const text = await this.callPublicTool('domains_suggest', {
         query: fullQuery,
       });
 
@@ -416,9 +416,9 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
   }
 
   /**
-   * Call a GoDaddy MCP tool via JSON-RPC.
+   * Call a GoDaddy public JSON-RPC tool.
    */
-  private async callMcpTool(
+  private async callPublicTool(
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<string> {
@@ -434,7 +434,7 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
       id: requestId,
     };
 
-    logger.debug('GoDaddy MCP request', {
+    logger.debug('GoDaddy public request', {
       tool: toolName,
       args,
       request_id: requestId,
@@ -442,7 +442,7 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
 
     try {
       const response = await this.withTimeout(
-        fetch(GODADDY_MCP_ENDPOINT, {
+        fetch(GODADDY_PUBLIC_ENDPOINT, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -450,13 +450,13 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
           },
           body: JSON.stringify(payload),
         }),
-        `GoDaddy MCP ${toolName}`,
+        `GoDaddy public ${toolName}`,
         15000, // 15 second timeout
       );
 
       if (!response.ok) {
         throw new RegistrarApiError(
-          'GoDaddy MCP',
+          'GoDaddy',
           `HTTP ${response.status}: ${response.statusText}`,
         );
       }
@@ -468,7 +468,7 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
       const dataMatch = rawText.match(/data:\s*(\{.*\})/s);
       if (!dataMatch) {
         throw new RegistrarApiError(
-          'GoDaddy MCP',
+          'GoDaddy',
           'Invalid response format - expected SSE',
         );
       }
@@ -477,18 +477,18 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
       const parsed = JSON.parse(jsonStr!);
 
       // Validate response
-      const validated = McpResponseSchema.parse(parsed);
+      const validated = GoDaddyRpcResponseSchema.parse(parsed);
 
       if (validated.error) {
         throw new RegistrarApiError(
-          'GoDaddy MCP',
+          'GoDaddy',
           `RPC Error ${validated.error.code}: ${validated.error.message}`,
         );
       }
 
       if (!validated.result || validated.result.isError) {
         throw new RegistrarApiError(
-          'GoDaddy MCP',
+          'GoDaddy',
           'Tool call returned error',
         );
       }
@@ -497,12 +497,12 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
       const textContent = validated.result.content.find(c => c.type === 'text');
       if (!textContent) {
         throw new RegistrarApiError(
-          'GoDaddy MCP',
+          'GoDaddy',
           'No text content in response',
         );
       }
 
-      logger.debug('GoDaddy MCP response', {
+      logger.debug('GoDaddy public response', {
         request_id: requestId,
         text_length: textContent.text.length,
       });
@@ -517,10 +517,10 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
         if (error.name === 'AbortError' || error.message.includes('timeout')) {
           throw error;
         }
-        throw new RegistrarApiError('GoDaddy MCP', error.message);
+        throw new RegistrarApiError('GoDaddy', error.message);
       }
 
-      throw new RegistrarApiError('GoDaddy MCP', 'Unknown network error');
+      throw new RegistrarApiError('GoDaddy', 'Unknown network error');
     }
   }
 }
@@ -528,4 +528,4 @@ export class GodaddyMcpAdapter extends RegistrarAdapter {
 /**
  * Singleton instance.
  */
-export const godaddyMcpAdapter = new GodaddyMcpAdapter();
+export const godaddyPublicAdapter = new GodaddyPublicAdapter();

@@ -53,7 +53,7 @@ fallbacks/*.ts (RDAP, WHOIS)
 **Domain Search Service** (`src/services/domain-search.ts`): Orchestrates source selection:
 1. Porkbun API (if configured)
 2. Namecheap API (if configured)
-3. GoDaddy MCP (always available, no auth)
+3. GoDaddy public endpoint (always available, no auth)
 4. RDAP fallback
 5. WHOIS last resort
 

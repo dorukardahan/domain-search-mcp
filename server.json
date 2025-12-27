@@ -1,0 +1,50 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.dorukardahan/domain-search-mcp",
+  "description": "Fast domain availability checker with pricing comparison and AI-powered suggestions.",
+  "repository": {
+    "url": "https://github.com/dorukardahan/domain-search-mcp",
+    "source": "github"
+  },
+  "version": "1.2.14",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "domain-search-mcp",
+      "version": "1.2.14",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Porkbun API key for pricing data (optional - works without it)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "PORKBUN_API_KEY"
+        },
+        {
+          "description": "Porkbun API secret (required with PORKBUN_API_KEY)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "PORKBUN_API_SECRET"
+        },
+        {
+          "description": "Namecheap API key (optional)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "NAMECHEAP_API_KEY"
+        },
+        {
+          "description": "Namecheap API username (required with NAMECHEAP_API_KEY)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "NAMECHEAP_API_USER"
+        }
+      ]
+    }
+  ]
+}

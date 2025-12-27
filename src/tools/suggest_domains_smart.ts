@@ -18,7 +18,7 @@ import {
   getSynonyms,
   getIndustryTerms,
 } from '../utils/semantic-engine.js';
-import { godaddyMcpAdapter, type GodaddySuggestion } from '../registrars/index.js';
+import { godaddyPublicAdapter, type GodaddySuggestion } from '../registrars/index.js';
 import { logger } from '../utils/logger.js';
 import type { DomainResult } from '../types.js';
 
@@ -276,7 +276,7 @@ export async function executeSuggestDomainsSmart(
     // Source 2: GoDaddy's AI suggestions (parallel call)
     let godaddySuggestions: GodaddySuggestion[] = [];
     try {
-      godaddySuggestions = await godaddyMcpAdapter.suggestDomains(query, {
+      godaddySuggestions = await godaddyPublicAdapter.suggestDomains(query, {
         tlds: [tld],
         limit: max_suggestions * 2,
       });
