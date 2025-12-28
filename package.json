@@ -2,7 +2,7 @@
   "name": "domain-search-mcp",
   "version": "1.2.16",
   "mcpName": "io.github.dorukardahan/domain-search-mcp",
-  "description": "Fast domain availability aggregator MCP server. Check availability across Porkbun, Namecheap, RDAP, and WHOIS. Compare pricing. Get suggestions.",
+  "description": "Fast domain availability MCP server. RDAP/WHOIS availability with backend pricing (Porkbun + Dynadot) and smart suggestions.",
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
   "bin": {
@@ -27,6 +27,7 @@
     "domain",
     "domain-search",
     "porkbun",
+    "dynadot",
     "namecheap",
     "whois",
     "rdap",

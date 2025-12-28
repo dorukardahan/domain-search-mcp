@@ -29,6 +29,12 @@ export interface DomainResult {
   /** Annual renewal price after first year */
   price_renewal: number | null;
 
+  /** Where pricing data came from (if any) */
+  pricing_source?: PricingSource;
+
+  /** Pricing fetch status for backend/catalog quotes */
+  pricing_status?: PricingStatus;
+
   /** Currency code (e.g., "USD", "EUR") */
   currency: string;
 
@@ -73,10 +79,34 @@ export interface DomainResult {
 export type DataSource =
   | 'porkbun_api'
   | 'namecheap_api'
+  | 'dynadot_api'
   | 'godaddy_api'
   | 'rdap'
   | 'whois'
+  | 'pricing_api'
+  | 'catalog'
   | 'cache';
+
+/**
+ * Pricing data origin (can differ from availability source).
+ */
+export type PricingSource =
+  | 'porkbun_api'
+  | 'namecheap_api'
+  | 'dynadot_api'
+  | 'pricing_api'
+  | 'catalog';
+
+/**
+ * Pricing status returned by the backend.
+ */
+export type PricingStatus =
+  | 'ok'
+  | 'partial'
+  | 'not_configured'
+  | 'error'
+  | 'catalog_only'
+  | 'not_available';
 
 /**
  * Complete response from a domain search operation.
@@ -213,6 +243,16 @@ export interface Config {
     apiUser?: string;
     clientIp?: string;
     enabled: boolean;
+  };
+
+  pricingApi: {
+    baseUrl?: string;
+    enabled: boolean;
+    timeoutMs: number;
+    maxQuotesPerSearch: number;
+    maxQuotesPerBulk: number;
+    concurrency: number;
+    token?: string;
   };
 
   // Logging

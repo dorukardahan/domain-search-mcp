@@ -38,6 +38,13 @@ import {
 } from '../registrars/index.js';
 import { checkRdap, isRdapAvailable } from '../fallbacks/rdap.js';
 import { checkWhois, isWhoisAvailable } from '../fallbacks/whois.js';
+import { fetchPricingQuote, fetchPricingCompare } from './pricing-api.js';
+import type {
+  PricingQuoteResponse,
+  PricingQuote,
+  PricingCompareResponse,
+  PricingCompareEntry,
+} from './pricing-api.js';
 import {
   generatePremiumInsight,
   generatePremiumSummary,
@@ -45,11 +52,41 @@ import {
   analyzePremiumReason,
   suggestPremiumAlternatives,
 } from '../utils/premium-analyzer.js';
+import type { PricingStatus, PricingSource } from '../types.js';
 
 const SEARCH_TLD_CONCURRENCY = 10;
 const BULK_CONCURRENCY = 20;
 const CACHE_TTL_AVAILABLE_MS = config.cache.availabilityTtl * 1000;
 const CACHE_TTL_TAKEN_MS = config.cache.availabilityTtl * 2000;
+
+type PricingOptions = {
+  enabled: boolean;
+  maxQuotes: number;
+};
+
+type PricingBudget = {
+  enabled: boolean;
+  take: () => boolean;
+};
+
+type SearchOptions = {
+  pricing?: PricingOptions;
+  includeGodaddySignals?: boolean;
+};
+
+function createPricingBudget(options?: PricingOptions): PricingBudget {
+  const enabled = options?.enabled ?? config.pricingApi.enabled;
+  const maxQuotes = options?.maxQuotes ?? config.pricingApi.maxQuotesPerSearch;
+  let remaining = enabled ? Math.max(0, maxQuotes) : 0;
+  return {
+    enabled,
+    take: () => {
+      if (!enabled || remaining <= 0) return false;
+      remaining -= 1;
+      return true;
+    },
+  };
+}
 
 /**
  * Search for domain availability across multiple TLDs.
@@ -58,10 +95,13 @@ export async function searchDomain(
   domainName: string,
   tlds: string[] = ['com', 'io', 'dev'],
   preferredRegistrars?: string[],
+  options?: SearchOptions,
 ): Promise<SearchResponse> {
   const startTime = Date.now();
   const normalizedDomain = validateDomainName(domainName);
   const normalizedTlds = validateTlds(tlds);
+  const includeGodaddySignals = options?.includeGodaddySignals ?? true;
+  const pricingBudget = createPricingBudget(options?.pricing);
 
   logger.info('Domain search started', {
     domain: normalizedDomain,
@@ -70,14 +110,18 @@ export async function searchDomain(
 
   // GoDaddy signal (premium/auction) for search_domain only
   let godaddySignals: Map<string, ParsedAvailability> | null = null;
-  try {
-    const fullDomains = normalizedTlds.map((tld) => buildDomain(normalizedDomain, tld));
-    godaddySignals = await godaddyPublicAdapter.bulkSearch(fullDomains);
-  } catch (error) {
-    logger.debug('GoDaddy signal lookup failed', {
-      domain: normalizedDomain,
-      error: error instanceof Error ? error.message : String(error),
-    });
+  if (includeGodaddySignals) {
+    try {
+      const fullDomains = normalizedTlds.map((tld) =>
+        buildDomain(normalizedDomain, tld),
+      );
+      godaddySignals = await godaddyPublicAdapter.bulkSearch(fullDomains);
+    } catch (error) {
+      logger.debug('GoDaddy signal lookup failed', {
+        domain: normalizedDomain,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   // Search each TLD
@@ -96,6 +140,7 @@ export async function searchDomain(
             tld,
             preferredRegistrars,
             godaddySignals,
+            pricingBudget,
           );
           if (result.fromCache) fromCache = true;
           return { success: true as const, tld, result: result.result };
@@ -149,6 +194,7 @@ async function searchSingleDomain(
   tld: string,
   preferredRegistrars?: string[],
   godaddySignals?: Map<string, ParsedAvailability> | null,
+  pricingBudget?: PricingBudget,
 ): Promise<{ result: DomainResult; fromCache: boolean }> {
   const fullDomain = buildDomain(domain, tld);
   const triedSources: string[] = [];
@@ -181,6 +227,7 @@ async function searchSingleDomain(
       const result = await trySource(domain, tld, source);
       if (result) {
         applyGodaddySignal(result, godaddySignal);
+        await applyPricingQuote(result, pricingBudget);
         // Calculate quality score
         result.score = calculateDomainScore(result);
 
@@ -259,9 +306,10 @@ function buildSourcePriority(
   preferredRegistrars?: string[],
 ): string[] {
   const sources: string[] = [];
+  const allowLocalRegistrars = !config.pricingApi.enabled;
 
   // Add preferred registrars first
-  if (preferredRegistrars && preferredRegistrars.length > 0) {
+  if (allowLocalRegistrars && preferredRegistrars && preferredRegistrars.length > 0) {
     for (const registrar of preferredRegistrars) {
       if (registrar === 'porkbun' && config.porkbun.enabled) {
         sources.push('porkbun');
@@ -269,7 +317,7 @@ function buildSourcePriority(
         sources.push('namecheap');
       }
     }
-  } else {
+  } else if (allowLocalRegistrars) {
     // Default priority: Porkbun first (best API with pricing), then Namecheap
     if (config.porkbun.enabled) sources.push('porkbun');
     if (config.namecheap.enabled) sources.push('namecheap');
@@ -330,6 +378,119 @@ function applyGodaddySignal(
       ? 'Premium domain (GoDaddy)'
       : 'Auction domain (GoDaddy)';
   }
+}
+
+function pickBestQuote(
+  quotes: PricingQuote[],
+  best: { registrar: string } | null,
+): PricingQuote | null {
+  if (best) {
+    const matched = quotes.find((q) => q.registrar === best.registrar);
+    if (matched) return matched;
+  }
+
+  return (
+    quotes.find((q) => q.price_first_year !== null) ||
+    quotes.find((q) => q.price_renewal !== null) ||
+    quotes[0] ||
+    null
+  );
+}
+
+function compareEntryToResult(entry: PricingCompareEntry): DomainResult {
+  return {
+    domain: entry.domain,
+    available: entry.available ?? true,
+    premium: entry.premium ?? false,
+    price_first_year: entry.price_first_year,
+    price_renewal: entry.price_renewal,
+    currency: entry.currency ?? 'USD',
+    privacy_included: false,
+    transfer_price: entry.price_transfer,
+    registrar: entry.registrar,
+    source: entry.source === 'catalog' ? 'catalog' : 'pricing_api',
+    pricing_source: entry.source === 'catalog' ? 'catalog' : 'pricing_api',
+    pricing_status: entry.quote_status,
+    checked_at: new Date().toISOString(),
+    premium_reason: entry.premium ? 'Premium domain' : undefined,
+  };
+}
+
+function mergePricing(
+  result: DomainResult,
+  payload: PricingQuoteResponse,
+): void {
+  result.pricing_status = payload.quote_status as PricingStatus;
+  result.pricing_source =
+    payload.quote_status === 'catalog_only' ? 'catalog' : 'pricing_api';
+
+  const quotes = payload.quotes || [];
+  const bestFirst = payload.best_first_year;
+  const selected = pickBestQuote(quotes, bestFirst);
+
+  if (bestFirst) {
+    result.price_first_year = bestFirst.price;
+    result.registrar = bestFirst.registrar;
+    if (bestFirst.currency) {
+      result.currency = bestFirst.currency;
+    }
+  } else if (selected && selected.price_first_year !== null) {
+    result.price_first_year = selected.price_first_year;
+    result.registrar = selected.registrar;
+    if (selected.currency) {
+      result.currency = selected.currency;
+    }
+  }
+
+  if (selected) {
+    result.price_renewal = selected.price_renewal ?? result.price_renewal;
+    result.transfer_price = selected.price_transfer ?? result.transfer_price;
+    if (!result.registrar) {
+      result.registrar = selected.registrar;
+    }
+  }
+
+  const hasPremium = quotes.some((q) => q.premium === true);
+  if (hasPremium) {
+    result.premium = true;
+    if (!result.premium_reason) {
+      result.premium_reason = 'Premium domain';
+    }
+  }
+}
+
+async function applyPricingQuote(
+  result: DomainResult,
+  pricingBudget?: PricingBudget,
+): Promise<void> {
+  if (result.source === 'porkbun_api' || result.source === 'namecheap_api') {
+    result.pricing_source = result.source as PricingSource;
+    result.pricing_status = result.price_first_year !== null ? 'ok' : 'partial';
+    return;
+  }
+
+  if (!pricingBudget?.enabled) {
+    result.pricing_status = 'not_configured';
+    return;
+  }
+
+  if (!result.available) {
+    result.pricing_status = 'not_available';
+    return;
+  }
+
+  if (!pricingBudget.take()) {
+    result.pricing_status = 'not_available';
+    return;
+  }
+
+  const payload = await fetchPricingQuote(result.domain);
+  if (!payload) {
+    result.pricing_status = 'error';
+    return;
+  }
+
+  mergePricing(result, payload);
 }
 
 /**
@@ -538,6 +699,10 @@ export async function bulkSearchDomains(
 ): Promise<DomainResult[]> {
   const startTime = Date.now();
   const results: DomainResult[] = [];
+  const pricingBudget = createPricingBudget({
+    enabled: config.pricingApi.enabled,
+    maxQuotes: config.pricingApi.maxQuotesPerBulk,
+  });
 
   logger.info('Bulk search started', {
     count: domains.length,
@@ -555,6 +720,8 @@ export async function bulkSearchDomains(
           normalizedDomain,
           tld,
           registrar ? [registrar] : undefined,
+          null,
+          pricingBudget,
         );
         return result;
       } catch (error) {
@@ -587,7 +754,7 @@ export async function bulkSearchDomains(
 export async function compareRegistrars(
   domain: string,
   tld: string,
-  registrars: string[] = ['porkbun', 'namecheap'],
+  registrars: string[] = ['porkbun', 'dynadot'],
 ): Promise<{
   comparisons: DomainResult[];
   best_first_year: { registrar: string; price: number } | null;
@@ -597,8 +764,55 @@ export async function compareRegistrars(
   const normalizedDomain = validateDomainName(domain);
   const comparisons: DomainResult[] = [];
 
-  // Check each registrar
-  for (const registrar of registrars) {
+  const normalizedRegistrars = registrars.map((r) => r.toLowerCase());
+
+  if (config.pricingApi.enabled) {
+    const response = await fetchPricingCompare(
+      normalizedDomain,
+      tld,
+      normalizedRegistrars.length > 0 ? normalizedRegistrars : undefined,
+    );
+
+    if (response) {
+      for (const entry of response.comparisons) {
+        comparisons.push(compareEntryToResult(entry));
+      }
+
+      const bestFirst = response.best_first_year
+        ? {
+            registrar: response.best_first_year.registrar,
+            price: response.best_first_year.price,
+          }
+        : null;
+      const bestRenewal = response.best_renewal
+        ? {
+            registrar: response.best_renewal.registrar,
+            price: response.best_renewal.price,
+          }
+        : null;
+
+      let recommendation = 'Could not compare registrars';
+      if (bestFirst && bestRenewal) {
+        if (bestFirst.registrar === bestRenewal.registrar) {
+          recommendation = `${bestFirst.registrar} offers the best price for both first year ($${bestFirst.price}) and renewal ($${bestRenewal.price})`;
+        } else {
+          recommendation = `${bestFirst.registrar} for first year ($${bestFirst.price}), ${bestRenewal.registrar} for renewal ($${bestRenewal.price})`;
+        }
+      } else if (bestFirst) {
+        recommendation = `${bestFirst.registrar} has the best first year price: $${bestFirst.price}`;
+      }
+
+      return {
+        comparisons,
+        best_first_year: bestFirst,
+        best_renewal: bestRenewal,
+        recommendation,
+      };
+    }
+  }
+
+  // Fallback: local registrar adapters (BYOK)
+  for (const registrar of normalizedRegistrars) {
     try {
       const { result } = await searchSingleDomain(normalizedDomain, tld, [
         registrar,

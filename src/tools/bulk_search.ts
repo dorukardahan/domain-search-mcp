@@ -30,7 +30,7 @@ export const bulkSearchSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Optional: specific registrar to use (e.g., 'porkbun'). Leave empty for fastest source.",
+      "Optional: specific registrar to use (BYOK only; ignored when Pricing API is configured).",
     ),
 });
 
@@ -68,7 +68,7 @@ Example:
       },
       registrar: {
         type: 'string',
-        description: "Optional: specific registrar to use.",
+        description: "Optional: specific registrar to use (BYOK only).",
       },
     },
     required: ['domains'],

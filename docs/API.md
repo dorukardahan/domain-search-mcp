@@ -12,7 +12,7 @@ Check domain availability across multiple TLDs with pricing.
 |-----------|------|----------|---------|-------------|
 | `domain_name` | string | Yes | - | Domain name without TLD |
 | `tlds` | string[] | No | `["com", "io", "dev"]` | TLDs to check |
-| `registrars` | string[] | No | auto | Specific registrars to query |
+| `registrars` | string[] | No | auto | Specific registrars to query (BYOK only; ignored when Pricing API is configured) |
 
 ### Response
 
@@ -25,8 +25,10 @@ interface SearchDomainResponse {
     price_renewal: number | null;
     privacy_included: boolean;
     registrar: string | null;
-    source: "porkbun_api" | "namecheap_api" | "godaddy_api" | "rdap" | "whois";
+    source: "porkbun_api" | "namecheap_api" | "godaddy_api" | "rdap" | "whois" | "pricing_api" | "catalog";
     premium: boolean;
+    pricing_source?: "pricing_api" | "catalog" | "porkbun_api" | "namecheap_api";
+    pricing_status?: "ok" | "partial" | "not_configured" | "error" | "catalog_only" | "not_available";
     error?: string;
   }>;
   insights: string[];
@@ -55,7 +57,9 @@ const result = await searchDomain({
 //   price_renewal: 8.95,
 //   privacy_included: true,
 //   registrar: "porkbun",
-//   source: "porkbun_api",
+//   source: "rdap",
+//   pricing_source: "pricing_api",
+//   pricing_status: "ok",
 //   premium: false
 // }
 ```
@@ -72,7 +76,7 @@ Check up to 100 domains at once with rate limiting.
 |-----------|------|----------|---------|-------------|
 | `domains` | string[] | Yes | - | Domain names (max 100) |
 | `tld` | string | No | "com" | Single TLD for all domains |
-| `registrar` | string | No | auto | Specific registrar |
+| `registrar` | string | No | auto | Specific registrar (BYOK only; ignored when Pricing API is configured) |
 
 ### Response
 
@@ -130,12 +134,14 @@ interface CompareRegistrarsResponse {
     available: boolean;
     price_first_year: number | null;
     price_renewal: number | null;
-    privacy_included: boolean;
+    price_transfer: number | null;
+    currency: string | null;
+    pricing_source?: "pricing_api" | "catalog";
+    pricing_status?: "ok" | "partial" | "not_configured" | "error" | "catalog_only" | "not_available";
   }>;
-  recommendation: {
-    registrar: string;
-    reason: string;
-  };
+  best_first_year: { registrar: string; price: number; currency: string } | null;
+  best_renewal: { registrar: string; price: number; currency: string } | null;
+  recommendation: string;
   insights: string[];
 }
 ```

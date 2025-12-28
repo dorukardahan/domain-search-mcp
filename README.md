@@ -8,7 +8,7 @@
 [![Glama](https://img.shields.io/badge/Glama-Server-0ea5e9)](https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp)
 [![Context7](https://img.shields.io/badge/Context7-Indexed-16a34a)](https://context7.com/dorukardahan/domain-search-mcp)
 
-Fast, local-first domain availability checks for MCP clients. Works with zero configuration using public RDAP/WHOIS, and optionally enriches results with registrar pricing when you add your own API keys.
+Fast, local-first domain availability checks for MCP clients. Works with zero configuration using public RDAP/WHOIS, and optionally enriches results with registrar pricing via a backend you control.
 
 Built on the [Model Context Protocol](https://modelcontextprotocol.io) for Claude, Codex, VS Code, Cursor, Cline, and other MCP-compatible clients.
 
@@ -16,7 +16,7 @@ Built on the [Model Context Protocol](https://modelcontextprotocol.io) for Claud
 
 - Check a single name across multiple TLDs.
 - Bulk-check up to 100 names for one TLD.
-- Compare registrar pricing (when keys are configured).
+- Compare registrar pricing (uses backend when configured).
 - Suggest names and validate social handles.
 - Detect premium/auction signals for `search_domain`.
 
@@ -29,7 +29,8 @@ Availability and pricing are intentionally separated:
   - Fallback: WHOIS
   - GoDaddy public endpoint is used only to add premium/auction signals in `search_domain`
 - Pricing (optional):
-  - Porkbun and Namecheap are BYOK adapters. If keys are missing, pricing fields are `null`.
+  - Recommended: `PRICING_API_BASE_URL` (backend with Porkbun + Dynadot keys)
+  - Optional BYOK: Porkbun/Namecheap only when backend is not configured
 
 This keeps the server zero-config while letting power users enable pricing.
 
@@ -71,7 +72,7 @@ npx domain-search-mcp
 
 - `search_domain`: Check a name across multiple TLDs, adds premium/auction signals.
 - `bulk_search`: Check up to 100 names for a single TLD.
-- `compare_registrars`: Compare pricing across registrars (requires API keys).
+- `compare_registrars`: Compare pricing across registrars (backend when configured).
 - `suggest_domains`: Generate variations (prefix/suffix/hyphen).
 - `suggest_domains_smart`: AI-assisted suggestions using the semantic engine plus GoDaddy suggestions.
 - `tld_info`: TLD metadata and restrictions.
@@ -79,25 +80,30 @@ npx domain-search-mcp
 
 ## Configuration
 
-### Optional API Keys (Pricing) + Cost Notes
+### Pricing Backend (Recommended)
 
-- Porkbun API keys are generated from your account dashboard. API access is included with a Porkbun account (no separate paid API tier is listed in their docs).
-  - Get keys: https://porkbun.com/account/api
-  - API docs: https://porkbun.com/api/json/v3/documentation
-- Namecheap API access requires IP whitelisting and eligibility. Requirements can include account status/eligibility checks; verify before relying on it.
-  - API access settings: https://ap.www.namecheap.com/settings/tools/apiaccess/
-  - API docs: https://www.namecheap.com/support/api/intro/
+Set a backend URL that owns registrar keys (Porkbun + Dynadot). The MCP will call
+`/api/quote` and `/api/compare` on that backend for pricing.
 
-Porkbun env vars:
+```bash
+PRICING_API_BASE_URL=https://your-backend.example.com
+PRICING_API_TOKEN=optional_bearer_token
+```
+
+### Optional BYOK (Local)
+
+Used only if `PRICING_API_BASE_URL` is not set.
+
+- Porkbun keys:
+  - https://porkbun.com/account/api
+  - https://porkbun.com/api/json/v3/documentation
+- Namecheap keys (IP whitelist required):
+  - https://ap.www.namecheap.com/settings/tools/apiaccess/
+  - https://www.namecheap.com/support/api/intro/
 
 ```bash
 PORKBUN_API_KEY=pk1_your_api_key
 PORKBUN_API_SECRET=sk1_your_secret
-```
-
-Namecheap env vars:
-
-```bash
 NAMECHEAP_API_KEY=your_api_key
 NAMECHEAP_API_USER=your_username
 NAMECHEAP_CLIENT_IP=your_whitelisted_ip
@@ -107,6 +113,12 @@ NAMECHEAP_CLIENT_IP=your_whitelisted_ip
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `PRICING_API_BASE_URL` | - | Pricing backend base URL |
+| `PRICING_API_TOKEN` | - | Optional bearer token |
+| `PRICING_API_TIMEOUT_MS` | 2500 | Backend request timeout |
+| `PRICING_API_MAX_QUOTES_SEARCH` | 5 | Max pricing calls per search |
+| `PRICING_API_MAX_QUOTES_BULK` | 10 | Max pricing calls per bulk search |
+| `PRICING_API_CONCURRENCY` | 4 | Pricing request concurrency |
 | `PORKBUN_API_KEY` | - | Porkbun API key |
 | `PORKBUN_API_SECRET` | - | Porkbun API secret |
 | `NAMECHEAP_API_KEY` | - | Namecheap API key |
@@ -120,6 +132,7 @@ NAMECHEAP_CLIENT_IP=your_whitelisted_ip
 
 | Source | Usage | Pricing |
 |--------|-------|---------|
+| Pricing API | Pricing + premium (Porkbun + Dynadot) | Yes (backend) |
 | Porkbun API | Availability + pricing | Yes (with keys) |
 | Namecheap API | Availability + pricing | Yes (with keys) |
 | RDAP | Primary availability | No |
@@ -146,7 +159,7 @@ npm run build     # compile to dist/
 ## Security Notes
 
 - Do not commit API keys or `.mcpregistry_*` files.
-- Without API keys, pricing is not available (availability still works).
+- Without `PRICING_API_BASE_URL` (or BYOK keys), pricing is not available (availability still works).
 
 ## Links
 

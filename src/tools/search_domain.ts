@@ -31,7 +31,7 @@ export const searchDomainSchema = z.object({
     .array(z.string())
     .optional()
     .describe(
-      "Optional: specific registrars to check (e.g., ['porkbun', 'namecheap']). Leave empty to auto-select.",
+      "Optional: specific registrars to check (BYOK only; ignored when Pricing API is configured).",
     ),
 });
 
@@ -46,7 +46,7 @@ export const searchDomainTool = {
 
 Returns:
 - Availability status for each domain
-- Pricing (first year and renewal)
+- Pricing (first year and renewal) when Pricing API is configured
 - Whether WHOIS privacy is included
 - Human-readable insights and next steps
 

@@ -6,18 +6,32 @@
     "url": "https://github.com/dorukardahan/domain-search-mcp",
     "source": "github"
   },
-  "version": "1.2.15",
+  "version": "1.2.16",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "domain-search-mcp",
-      "version": "1.2.15",
+      "version": "1.2.16",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "description": "Porkbun API key for pricing data (optional - works without it)",
+          "description": "Pricing backend base URL (recommended)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "PRICING_API_BASE_URL"
+        },
+        {
+          "description": "Optional bearer token for pricing backend",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "PRICING_API_TOKEN"
+        },
+        {
+          "description": "Porkbun API key (BYOK, used only if PRICING_API_BASE_URL is not set)",
           "isRequired": false,
           "format": "string",
           "isSecret": true,
@@ -31,7 +45,7 @@
           "name": "PORKBUN_API_SECRET"
         },
         {
-          "description": "Namecheap API key (optional)",
+          "description": "Namecheap API key (BYOK, used only if PRICING_API_BASE_URL is not set)",
           "isRequired": false,
           "format": "string",
           "isSecret": true,

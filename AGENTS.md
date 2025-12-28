@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/` contains the MCP server and core logic. Key areas: `src/tools/` (tool schemas/executors), `src/services/` (orchestration), `src/registrars/` (adapter integrations), `src/fallbacks/` (RDAP/WHOIS), and `src/utils/` (cache, logging, concurrency).
+- `src/` contains the MCP server and core logic. Key areas: `src/tools/` (tool schemas/executors), `src/services/` (orchestration + pricing API client), `src/registrars/` (adapter integrations), `src/fallbacks/` (RDAP/WHOIS), and `src/utils/` (cache, logging, concurrency).
 - `tests/` holds Jest tests (`tests/unit/` + `tests/premium-analyzer.test.ts`).
 - `docs/` contains API and configuration docs; `examples/` has runnable scripts.
 - `dist/` is build output; `server.json` is MCP metadata; `bin/` holds the CLI entrypoint.

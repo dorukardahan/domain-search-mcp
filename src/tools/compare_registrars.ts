@@ -26,7 +26,7 @@ export const compareRegistrarsSchema = z.object({
     .array(z.string())
     .optional()
     .describe(
-      "Registrars to compare (e.g., ['porkbun', 'namecheap']). Defaults to all available.",
+      "Registrars to compare (e.g., ['porkbun', 'dynadot']). Defaults to all available.",
     ),
 });
 
@@ -44,10 +44,12 @@ Checks the same domain at different registrars to find:
 - Best renewal price
 - Overall recommendation
 
+Uses the Pricing API when configured; otherwise falls back to BYOK registrars.
+
 Returns pricing comparison and a recommendation.
 
 Example:
-- compare_registrars("vibecoding", "com") → compares Porkbun vs Namecheap`,
+- compare_registrars("vibecoding", "com") → compares Porkbun vs Dynadot`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -63,7 +65,7 @@ Example:
         type: 'array',
         items: { type: 'string' },
         description:
-          "Registrars to compare. Defaults to ['porkbun', 'namecheap'].",
+          "Registrars to compare. Defaults to ['porkbun', 'dynadot'].",
       },
     },
     required: ['domain', 'tld'],

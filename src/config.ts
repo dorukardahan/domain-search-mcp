@@ -51,6 +51,7 @@ export function loadConfig(): Config {
   // Check for API keys
   const hasPorkbun = !!(env.PORKBUN_API_KEY && env.PORKBUN_API_SECRET);
   const hasNamecheap = !!(env.NAMECHEAP_API_KEY && env.NAMECHEAP_API_USER);
+  const hasPricingApi = !!env.PRICING_API_BASE_URL;
 
   const config: Config = {
     porkbun: {
@@ -63,6 +64,15 @@ export function loadConfig(): Config {
       apiUser: env.NAMECHEAP_API_USER,
       clientIp: env.NAMECHEAP_CLIENT_IP,
       enabled: hasNamecheap,
+    },
+    pricingApi: {
+      baseUrl: env.PRICING_API_BASE_URL,
+      enabled: hasPricingApi,
+      timeoutMs: parseIntWithDefault(env.PRICING_API_TIMEOUT_MS, 2500),
+      maxQuotesPerSearch: parseIntWithDefault(env.PRICING_API_MAX_QUOTES_SEARCH, 5),
+      maxQuotesPerBulk: parseIntWithDefault(env.PRICING_API_MAX_QUOTES_BULK, 10),
+      concurrency: parseIntWithDefault(env.PRICING_API_CONCURRENCY, 4),
+      token: env.PRICING_API_TOKEN,
     },
     logLevel: (env.LOG_LEVEL as Config['logLevel']) || 'info',
     cache: {
@@ -106,7 +116,7 @@ export const config = loadConfig();
  * Check if any registrar APIs are configured.
  */
 export function hasRegistrarApi(): boolean {
-  return config.porkbun.enabled || config.namecheap.enabled;
+  return config.pricingApi.enabled || config.porkbun.enabled || config.namecheap.enabled;
 }
 
 /**
@@ -114,6 +124,7 @@ export function hasRegistrarApi(): boolean {
  */
 export function getAvailableSources(): string[] {
   const sources: string[] = [];
+  if (config.pricingApi.enabled) sources.push('pricing_api');
   if (config.porkbun.enabled) sources.push('porkbun');
   if (config.namecheap.enabled) sources.push('namecheap');
   sources.push('rdap', 'whois'); // Always available as fallbacks

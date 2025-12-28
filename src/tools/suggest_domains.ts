@@ -226,7 +226,10 @@ export async function executeSuggestDomains(
 
     for (const name of toCheck) {
       try {
-        const response = await searchDomain(name, [tld]);
+        const response = await searchDomain(name, [tld], undefined, {
+          pricing: { enabled: false, maxQuotes: 0 },
+          includeGodaddySignals: false,
+        });
         const result = response.results.find((r) => r.domain === `${name}.${tld}`);
         results.push({ name, result: result || null });
       } catch {

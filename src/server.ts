@@ -253,7 +253,7 @@ async function main(): Promise<void> {
       'No registrar API keys configured. Falling back to RDAP/WHOIS only.',
     );
     logger.warn(
-      'For pricing info, add PORKBUN_API_KEY and PORKBUN_API_SECRET to your .env file.',
+      'For pricing info, set PRICING_API_BASE_URL (recommended) or add BYOK registrar keys.',
     );
   }
 

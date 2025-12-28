@@ -2,6 +2,8 @@
 
 Practical examples for common domain search scenarios.
 
+Note: pricing fields are populated only when `PRICING_API_BASE_URL` (or BYOK keys) are configured.
+
 ## Brand Validation Pipeline
 
 Check domain and social media availability together:

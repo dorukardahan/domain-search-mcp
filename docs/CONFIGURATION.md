@@ -2,34 +2,38 @@
 
 Detailed setup and configuration for Domain Search MCP.
 
-## API Keys Setup
+## Pricing Backend (Recommended)
 
-### Porkbun (Recommended)
-
-Free, fast, no restrictions.
-
-1. Go to https://porkbun.com/account/api
-2. Create account (no credit card required)
-3. Click "Create API Key"
-4. Save both keys
+The MCP does not ship registrar secrets. Pricing is retrieved from a backend you control.
 
 ```bash
 # .env
+PRICING_API_BASE_URL=https://your-backend.example.com
+PRICING_API_TOKEN=optional_bearer_token
+PRICING_API_TIMEOUT_MS=2500
+PRICING_API_MAX_QUOTES_SEARCH=5
+PRICING_API_MAX_QUOTES_BULK=10
+PRICING_API_CONCURRENCY=4
+```
+
+### Optional BYOK (Local)
+
+These are only used if `PRICING_API_BASE_URL` is not set.
+
+**Porkbun**
+1. https://porkbun.com/account/api
+2. Create API Key + Secret
+
+```bash
 PORKBUN_API_KEY=pk1_your_api_key_here
 PORKBUN_API_SECRET=sk1_your_secret_key_here
 ```
 
-### Namecheap (Optional)
-
-Requires IP whitelist.
-
-1. Go to https://ap.www.namecheap.com/settings/tools/apiaccess
-2. Enable API Access
-3. Whitelist your IP
-4. Copy credentials
+**Namecheap (IP whitelist required)**
+1. https://ap.www.namecheap.com/settings/tools/apiaccess
+2. Enable API access + whitelist IP
 
 ```bash
-# .env
 NAMECHEAP_API_KEY=your_api_key
 NAMECHEAP_API_USER=your_username
 NAMECHEAP_CLIENT_IP=your_ip_address
@@ -39,16 +43,22 @@ NAMECHEAP_CLIENT_IP=your_ip_address
 
 The server automatically selects the best available source:
 
-1. **Porkbun API** - If configured (fastest, with pricing)
-2. **Namecheap API** - If configured
-3. **RDAP** - Primary public availability source (fast, no pricing)
+1. **Pricing API** - If configured (pricing + premium flags)
+2. **Porkbun/Namecheap (BYOK)** - Only when Pricing API is not set
+3. **RDAP** - Primary availability source (fast, no pricing)
 4. **WHOIS** - Last resort (slow)
-5. **GoDaddy public endpoint** - Used only for premium/auction signals in `search_domain`
+5. **GoDaddy public endpoint** - Premium/auction signals in `search_domain` only
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `PRICING_API_BASE_URL` | - | Pricing backend base URL |
+| `PRICING_API_TOKEN` | - | Optional bearer token |
+| `PRICING_API_TIMEOUT_MS` | 2500 | Backend request timeout |
+| `PRICING_API_MAX_QUOTES_SEARCH` | 5 | Max pricing calls per search |
+| `PRICING_API_MAX_QUOTES_BULK` | 10 | Max pricing calls per bulk search |
+| `PRICING_API_CONCURRENCY` | 4 | Pricing request concurrency |
 | `PORKBUN_API_KEY` | - | Porkbun API key |
 | `PORKBUN_API_SECRET` | - | Porkbun API secret |
 | `NAMECHEAP_API_KEY` | - | Namecheap API key |
@@ -123,21 +133,8 @@ Add to `.vscode/settings.json`:
 
 ## Rate Limits
 
-### With API Keys
-
-| Source | Requests/min | Response Time |
-|--------|-------------|---------------|
-| Porkbun | 1000+ | 100-200ms |
-| Namecheap | 500+ | 150-300ms |
-
-### Without API Keys
-
-| Source | Requests/min | Response Time |
-|--------|-------------|---------------|
-| RDAP | 30-50 | 50-200ms |
-| WHOIS | 5-20 | 500-2000ms |
-
-The server handles rate limits automatically with exponential backoff.
+Pricing calls are budgeted per request (`PRICING_API_MAX_QUOTES_*`) and cached.
+Availability uses RDAP/WHOIS locally to avoid central bottlenecks.
 
 ## Caching
 
@@ -156,7 +153,7 @@ CACHE_TTL_PRICING=3600
 
 ## Verifying Setup
 
-Check if API keys are working:
+Check if pricing is working:
 
 ```typescript
 const result = await searchDomain({
@@ -164,16 +161,17 @@ const result = await searchDomain({
   tlds: ["com"]
 });
 
-console.log("Source:", result.results[0].source);
-// "porkbun_api" = API keys working
-// "rdap" or "whois" = falling back (no API keys)
+console.log("Pricing status:", result.results[0].pricing_status);
+console.log("Pricing source:", result.results[0].pricing_source);
+// "ok" + "pricing_api" = backend working
+// "not_configured" = PRICING_API_BASE_URL not set
 ```
 
 ## Troubleshooting
 
 ### "No pricing data"
 
-API keys not configured. Add Porkbun keys to .env.
+Pricing backend not configured (set `PRICING_API_BASE_URL`) or pricing is rate-limited.
 
 ### "Rate limit exceeded"
 

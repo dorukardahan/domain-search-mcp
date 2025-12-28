@@ -378,7 +378,10 @@ export async function executeSuggestDomainsSmart(
       const batchResults = await Promise.all(
         batch.map(async (name) => {
           try {
-            const response = await searchDomain(name, [tld]);
+            const response = await searchDomain(name, [tld], undefined, {
+              pricing: { enabled: false, maxQuotes: 0 },
+              includeGodaddySignals: false,
+            });
             const result = response.results.find((r) => r.domain === `${name}.${tld}`);
             return { name, result: result || null };
           } catch {
