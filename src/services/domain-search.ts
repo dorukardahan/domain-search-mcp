@@ -594,6 +594,14 @@ function mergePricing(
     }
   }
 
+  const hasAnyPrice =
+    result.price_first_year !== null ||
+    result.price_renewal !== null ||
+    result.transfer_price !== null;
+  if (!hasAnyPrice && result.pricing_status === 'ok') {
+    result.pricing_status = 'partial';
+  }
+
   applyPricingMetadata(result);
 }
 
