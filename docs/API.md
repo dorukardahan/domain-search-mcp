@@ -79,7 +79,8 @@ const result = await searchDomain({
 
 ## bulk_search
 
-Check up to 100 domains at once with rate limiting.
+Check up to 100 domains at once. Live pricing is attempted first for available domains,
+then falls back to catalog estimates when rate-limited or unavailable.
 
 ### Parameters
 

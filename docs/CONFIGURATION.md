@@ -11,8 +11,8 @@ The MCP does not ship registrar secrets. Pricing is retrieved from a backend you
 PRICING_API_BASE_URL=https://your-backend.example.com
 PRICING_API_TOKEN=optional_bearer_token
 PRICING_API_TIMEOUT_MS=2500
-PRICING_API_MAX_QUOTES_SEARCH=5
-PRICING_API_MAX_QUOTES_BULK=10
+PRICING_API_MAX_QUOTES_SEARCH=0
+PRICING_API_MAX_QUOTES_BULK=0
 PRICING_API_CONCURRENCY=4
 ```
 
@@ -56,8 +56,8 @@ The server automatically selects the best available source:
 | `PRICING_API_BASE_URL` | - | Pricing backend base URL |
 | `PRICING_API_TOKEN` | - | Optional bearer token |
 | `PRICING_API_TIMEOUT_MS` | 2500 | Backend request timeout |
-| `PRICING_API_MAX_QUOTES_SEARCH` | 5 | Max pricing calls per search |
-| `PRICING_API_MAX_QUOTES_BULK` | 10 | Max pricing calls per bulk search |
+| `PRICING_API_MAX_QUOTES_SEARCH` | 0 | Max pricing calls per search (0 = unlimited) |
+| `PRICING_API_MAX_QUOTES_BULK` | 0 | Max pricing calls per bulk search (0 = unlimited) |
 | `PRICING_API_CONCURRENCY` | 4 | Pricing request concurrency |
 | `PORKBUN_API_KEY` | - | Porkbun API key |
 | `PORKBUN_API_SECRET` | - | Porkbun API secret |
@@ -133,7 +133,8 @@ Add to `.vscode/settings.json`:
 
 ## Rate Limits
 
-Pricing calls are budgeted per request (`PRICING_API_MAX_QUOTES_*`) and cached.
+Pricing calls are attempted for every available domain by default. Set `PRICING_API_MAX_QUOTES_*`
+to a positive integer to cap per-request pricing calls (0 = unlimited).
 Availability uses RDAP/WHOIS locally to avoid central bottlenecks.
 
 ## Caching

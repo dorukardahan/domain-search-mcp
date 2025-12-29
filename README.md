@@ -125,8 +125,8 @@ NAMECHEAP_CLIENT_IP=your_whitelisted_ip
 | `PRICING_API_BASE_URL` | - | Pricing backend base URL |
 | `PRICING_API_TOKEN` | - | Optional bearer token |
 | `PRICING_API_TIMEOUT_MS` | 2500 | Backend request timeout |
-| `PRICING_API_MAX_QUOTES_SEARCH` | 5 | Max pricing calls per search |
-| `PRICING_API_MAX_QUOTES_BULK` | 10 | Max pricing calls per bulk search |
+| `PRICING_API_MAX_QUOTES_SEARCH` | 0 | Max pricing calls per search (0 = unlimited; backend rate limits apply) |
+| `PRICING_API_MAX_QUOTES_BULK` | 0 | Max pricing calls per bulk search (0 = unlimited; backend rate limits apply) |
 | `PRICING_API_CONCURRENCY` | 4 | Pricing request concurrency |
 | `PORKBUN_API_KEY` | - | Porkbun API key |
 | `PORKBUN_API_SECRET` | - | Porkbun API secret |
@@ -147,6 +147,12 @@ NAMECHEAP_CLIENT_IP=your_whitelisted_ip
 | RDAP | Primary availability | No |
 | WHOIS | Fallback availability | No |
 | GoDaddy public endpoint | Premium/auction signal for `search_domain` | No |
+
+## Pricing Behavior
+
+- Live price is attempted first for every **available** domain.
+- If live quotes fail or are rate-limited, the result falls back to the catalog estimate and includes `price_note`.
+- Always verify pricing via `price_check_url` before purchase.
 
 ## Example (No API Keys)
 

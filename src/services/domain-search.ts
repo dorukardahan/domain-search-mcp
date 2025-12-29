@@ -80,11 +80,14 @@ const PRICE_WARNING =
 function createPricingBudget(options?: PricingOptions): PricingBudget {
   const enabled = options?.enabled ?? config.pricingApi.enabled;
   const maxQuotes = options?.maxQuotes ?? config.pricingApi.maxQuotesPerSearch;
+  const unlimited = enabled && maxQuotes <= 0;
   let remaining = enabled ? Math.max(0, maxQuotes) : 0;
   return {
     enabled,
     take: () => {
-      if (!enabled || remaining <= 0) return false;
+      if (!enabled) return false;
+      if (unlimited) return true;
+      if (remaining <= 0) return false;
       remaining -= 1;
       return true;
     },
@@ -95,8 +98,7 @@ function buildRegistrarPriceUrl(
   registrar: string | undefined,
   domain: string,
 ): string | null {
-  if (!registrar) return null;
-  const normalized = registrar.toLowerCase();
+  const normalized = registrar ? registrar.toLowerCase() : 'unknown';
   switch (normalized) {
     case 'porkbun':
       return `https://porkbun.com/checkout/search?q=${encodeURIComponent(domain)}`;
@@ -105,14 +107,30 @@ function buildRegistrarPriceUrl(
     case 'namecheap':
       return `https://www.namecheap.com/domains/registration/results/?domain=${encodeURIComponent(domain)}`;
     case 'godaddy':
+    case 'unknown':
       return `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domain)}`;
     default:
-      return null;
+      return `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domain)}`;
   }
 }
 
 function buildAftermarketUrl(domain: string): string {
   return `https://auctions.godaddy.com/trpSearchResults.aspx?domain=${encodeURIComponent(domain)}`;
+}
+
+function applyAftermarketFallback(result: DomainResult): void {
+  if (result.available || result.aftermarket) {
+    return;
+  }
+
+  result.aftermarket = {
+    type: 'aftermarket',
+    price: null,
+    currency: null,
+    source: 'fallback',
+    url: buildAftermarketUrl(result.domain),
+    note: 'Domain is taken. Check aftermarket listings at the marketplace link.',
+  };
 }
 
 function applyPricingMetadata(result: DomainResult): void {
@@ -121,19 +139,42 @@ function applyPricingMetadata(result: DomainResult): void {
       buildRegistrarPriceUrl(result.registrar, result.domain) || undefined;
   }
 
+  if (result.price_note) {
+    return;
+  }
+
   if (result.pricing_status === 'catalog_only') {
     result.price_note = 'Estimated price from catalog. Verify via price_check_url.';
     return;
   }
 
   if (result.pricing_status === 'not_available') {
-    result.price_note = 'Price unavailable (rate-limited or not configured). Verify via price_check_url.';
+    result.price_note =
+      'Live price unavailable (rate-limited or not configured). Verify via price_check_url.';
+    return;
+  }
+
+  if (result.pricing_status === 'not_configured') {
+    result.price_note = 'Pricing backend not configured. Verify via price_check_url.';
     return;
   }
 
   if (result.pricing_status === 'error') {
     result.price_note = 'Price check failed. Verify via price_check_url.';
+    return;
   }
+
+  if (result.pricing_status === 'partial') {
+    result.price_note = 'Partial price data. Verify via price_check_url.';
+    return;
+  }
+
+  if (result.pricing_status === 'ok') {
+    result.price_note = 'Live price quote. Verify via price_check_url.';
+    return;
+  }
+
+  result.price_note = 'Verify pricing via price_check_url.';
 }
 
 /**
@@ -341,6 +382,7 @@ async function searchSingleDomain(
     }
 
     applyPricingMetadata(fallbackResult);
+    applyAftermarketFallback(fallbackResult);
 
     const cacheKey = domainCacheKey(fullDomain, fallbackResult.source);
     const ttlMs = fallbackResult.available ? CACHE_TTL_AVAILABLE_MS : CACHE_TTL_TAKEN_MS;
@@ -425,7 +467,7 @@ function applyGodaddySignal(
   result: DomainResult,
   signal?: ParsedAvailability | null,
 ): void {
-  if (!signal || !result.available) {
+  if (!signal) {
     return;
   }
 
@@ -434,10 +476,10 @@ function applyGodaddySignal(
   }
 
   if (signal.premium || signal.auction) {
-    result.premium = true;
-    result.premium_reason = signal.premium
-      ? 'Premium domain (GoDaddy)'
-      : 'Auction domain (GoDaddy)';
+    if (signal.premium) {
+      result.premium = true;
+      result.premium_reason = result.premium_reason || 'Premium domain (GoDaddy)';
+    }
     result.aftermarket = {
       type: signal.auction ? 'auction' : 'premium',
       price: null,
@@ -484,7 +526,19 @@ function compareEntryToResult(entry: PricingCompareEntry): DomainResult {
     premium_reason: entry.premium ? 'Premium domain' : undefined,
   };
 
+  if (result.premium && result.price_first_year !== null) {
+    result.aftermarket = {
+      type: 'premium',
+      price: result.price_first_year,
+      currency: result.currency ?? null,
+      source: entry.source === 'catalog' ? 'catalog' : 'pricing_api',
+      url: buildRegistrarPriceUrl(result.registrar, result.domain) || undefined,
+      note: 'Premium pricing detected. Verify at registrar checkout.',
+    };
+  }
+
   applyPricingMetadata(result);
+  applyAftermarketFallback(result);
   return result;
 }
 
@@ -551,24 +605,28 @@ async function applyPricingQuote(
     result.pricing_source = result.source as PricingSource;
     result.pricing_status = result.price_first_year !== null ? 'ok' : 'partial';
     applyPricingMetadata(result);
+    applyAftermarketFallback(result);
     return;
   }
 
   if (!pricingBudget?.enabled) {
     result.pricing_status = 'not_configured';
     applyPricingMetadata(result);
+    applyAftermarketFallback(result);
     return;
   }
 
   if (!result.available) {
     result.pricing_status = 'not_available';
     applyPricingMetadata(result);
+    applyAftermarketFallback(result);
     return;
   }
 
   if (!pricingBudget.take()) {
     result.pricing_status = 'not_available';
     applyPricingMetadata(result);
+    applyAftermarketFallback(result);
     return;
   }
 
@@ -576,10 +634,12 @@ async function applyPricingQuote(
   if (!payload) {
     result.pricing_status = 'error';
     applyPricingMetadata(result);
+    applyAftermarketFallback(result);
     return;
   }
 
   mergePricing(result, payload);
+  applyAftermarketFallback(result);
 }
 
 /**
