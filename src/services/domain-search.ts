@@ -117,7 +117,8 @@ function buildAftermarketUrl(domain: string): string {
 
 function applyPricingMetadata(result: DomainResult): void {
   if (!result.price_check_url) {
-    result.price_check_url = buildRegistrarPriceUrl(result.registrar, result.domain);
+    result.price_check_url =
+      buildRegistrarPriceUrl(result.registrar, result.domain) || undefined;
   }
 
   if (result.pricing_status === 'catalog_only') {
