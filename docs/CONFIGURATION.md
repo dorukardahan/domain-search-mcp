@@ -64,6 +64,7 @@ The server automatically selects the best available source:
 | `NAMECHEAP_API_KEY` | - | Namecheap API key |
 | `NAMECHEAP_API_USER` | - | Namecheap username |
 | `NAMECHEAP_CLIENT_IP` | - | Whitelisted IP |
+| `OUTPUT_FORMAT` | table | `table`, `json`, or `both` for tool output formatting |
 | `LOG_LEVEL` | info | Logging level |
 | `CACHE_TTL_AVAILABILITY` | 60 | Cache TTL (seconds) for available results (taken results use ~2x) |
 | `CACHE_TTL_PRICING` | 3600 | Pricing cache TTL |

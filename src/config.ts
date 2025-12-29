@@ -42,6 +42,16 @@ function parseBool(value: string | undefined, defaultValue: boolean): boolean {
   return value.toLowerCase() === 'true' || value === '1';
 }
 
+function parseOutputFormat(
+  value: string | undefined,
+): Config['outputFormat'] {
+  const normalized = (value || '').toLowerCase();
+  if (normalized === 'json' || normalized === 'both' || normalized === 'table') {
+    return normalized;
+  }
+  return 'table';
+}
+
 /**
  * Load and validate configuration from environment.
  */
@@ -101,6 +111,7 @@ export function loadConfig(): Config {
       'local',
     ]),
     dryRun: parseBool(env.DRY_RUN, false),
+    outputFormat: parseOutputFormat(env.OUTPUT_FORMAT),
   };
 
   return config;

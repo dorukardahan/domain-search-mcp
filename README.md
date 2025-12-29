@@ -133,9 +133,19 @@ NAMECHEAP_CLIENT_IP=your_whitelisted_ip
 | `NAMECHEAP_API_KEY` | - | Namecheap API key |
 | `NAMECHEAP_API_USER` | - | Namecheap username |
 | `NAMECHEAP_CLIENT_IP` | - | Namecheap IP whitelist |
+| `OUTPUT_FORMAT` | table | `table`, `json`, or `both` for tool output formatting |
 | `LOG_LEVEL` | info | Logging level |
 | `CACHE_TTL_AVAILABILITY` | 60 | Availability cache TTL (seconds) |
 | `CACHE_TTL_PRICING` | 3600 | Pricing cache TTL (seconds) |
+
+### Output Format
+
+Tool responses are returned as **Markdown tables by default**. If you need raw
+JSON for programmatic use, set:
+
+```bash
+OUTPUT_FORMAT=json
+```
 
 ## Data Sources
 

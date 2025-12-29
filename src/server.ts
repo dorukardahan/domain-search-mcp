@@ -28,6 +28,7 @@ import {
 import { config, getAvailableSources, hasRegistrarApi } from './config.js';
 import { logger, generateRequestId, setRequestId, clearRequestId } from './utils/logger.js';
 import { wrapError, DomainSearchError } from './utils/errors.js';
+import { formatToolResult, formatToolError } from './utils/format.js';
 import {
   searchDomainTool,
   executeSearchDomain,
@@ -110,7 +111,7 @@ function createServer(): Server {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(result, null, 2),
+            text: formatToolResult(name, result, config.outputFormat),
           },
         ],
       };
@@ -129,16 +130,14 @@ function createServer(): Server {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(
+            text: formatToolError(
               {
-                error: true,
                 code: wrapped.code,
-                message: wrapped.userMessage,
+                userMessage: wrapped.userMessage,
                 retryable: wrapped.retryable,
                 suggestedAction: wrapped.suggestedAction,
               },
-              null,
-              2,
+              config.outputFormat,
             ),
           },
         ],

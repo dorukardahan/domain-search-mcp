@@ -289,6 +289,9 @@ export interface Config {
 
   // Development
   dryRun: boolean;
+
+  // Output format for tool results
+  outputFormat: 'table' | 'json' | 'both';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

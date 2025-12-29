@@ -2,6 +2,9 @@
 
 Complete API documentation for Domain Search MCP.
 
+> Note: Tool outputs are returned as Markdown tables by default.  
+> Set `OUTPUT_FORMAT=json` to get raw JSON matching the schemas below.
+
 ## search_domain
 
 Check domain availability across multiple TLDs with pricing.
