@@ -34,6 +34,15 @@ Availability and pricing are intentionally separated:
 
 This keeps the server zero-config while letting power users enable pricing.
 
+## Pricing Verification
+
+Responses include `price_check_url` (registrar checkout/search link) and may include
+`price_note` when a price is estimated. Always verify the final price on the registrar
+checkout page before purchase.
+
+If an auction/premium signal is detected, results include an `aftermarket` block with
+links to marketplace pages when available.
+
 ## Quick Start
 
 ```bash

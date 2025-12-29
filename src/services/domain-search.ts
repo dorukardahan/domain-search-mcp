@@ -74,6 +74,9 @@ type SearchOptions = {
   includeGodaddySignals?: boolean;
 };
 
+const PRICE_WARNING =
+  '⚠️ Prices can change. Verify at registrar checkout links before purchase.';
+
 function createPricingBudget(options?: PricingOptions): PricingBudget {
   const enabled = options?.enabled ?? config.pricingApi.enabled;
   const maxQuotes = options?.maxQuotes ?? config.pricingApi.maxQuotesPerSearch;
@@ -86,6 +89,50 @@ function createPricingBudget(options?: PricingOptions): PricingBudget {
       return true;
     },
   };
+}
+
+function buildRegistrarPriceUrl(
+  registrar: string | undefined,
+  domain: string,
+): string | null {
+  if (!registrar) return null;
+  const normalized = registrar.toLowerCase();
+  switch (normalized) {
+    case 'porkbun':
+      return `https://porkbun.com/checkout/search?q=${encodeURIComponent(domain)}`;
+    case 'dynadot':
+      return `https://www.dynadot.com/domain/search?domain=${encodeURIComponent(domain)}`;
+    case 'namecheap':
+      return `https://www.namecheap.com/domains/registration/results/?domain=${encodeURIComponent(domain)}`;
+    case 'godaddy':
+      return `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domain)}`;
+    default:
+      return null;
+  }
+}
+
+function buildAftermarketUrl(domain: string): string {
+  return `https://auctions.godaddy.com/trpSearchResults.aspx?domain=${encodeURIComponent(domain)}`;
+}
+
+function applyPricingMetadata(result: DomainResult): void {
+  if (!result.price_check_url) {
+    result.price_check_url = buildRegistrarPriceUrl(result.registrar, result.domain);
+  }
+
+  if (result.pricing_status === 'catalog_only') {
+    result.price_note = 'Estimated price from catalog. Verify via price_check_url.';
+    return;
+  }
+
+  if (result.pricing_status === 'not_available') {
+    result.price_note = 'Price unavailable (rate-limited or not configured). Verify via price_check_url.';
+    return;
+  }
+
+  if (result.pricing_status === 'error') {
+    result.price_note = 'Price check failed. Verify via price_check_url.';
+  }
 }
 
 /**
@@ -281,6 +328,19 @@ async function searchSingleDomain(
         : undefined,
     };
 
+    if (godaddySignal.premium || godaddySignal.auction) {
+      fallbackResult.aftermarket = {
+        type: godaddySignal.auction ? 'auction' : 'premium',
+        price: null,
+        currency: null,
+        source: 'godaddy_signal',
+        url: buildAftermarketUrl(fallbackResult.domain),
+        note: 'Aftermarket/auction detected. Verify price at the marketplace link.',
+      };
+    }
+
+    applyPricingMetadata(fallbackResult);
+
     const cacheKey = domainCacheKey(fullDomain, fallbackResult.source);
     const ttlMs = fallbackResult.available ? CACHE_TTL_AVAILABLE_MS : CACHE_TTL_TAKEN_MS;
     domainCache.set(cacheKey, fallbackResult, ttlMs);
@@ -377,6 +437,14 @@ function applyGodaddySignal(
     result.premium_reason = signal.premium
       ? 'Premium domain (GoDaddy)'
       : 'Auction domain (GoDaddy)';
+    result.aftermarket = {
+      type: signal.auction ? 'auction' : 'premium',
+      price: null,
+      currency: null,
+      source: 'godaddy_signal',
+      url: buildAftermarketUrl(result.domain),
+      note: 'Aftermarket/auction detected. Verify price at the marketplace link.',
+    };
   }
 }
 
@@ -398,7 +466,7 @@ function pickBestQuote(
 }
 
 function compareEntryToResult(entry: PricingCompareEntry): DomainResult {
-  return {
+  const result: DomainResult = {
     domain: entry.domain,
     available: entry.available ?? true,
     premium: entry.premium ?? false,
@@ -414,6 +482,9 @@ function compareEntryToResult(entry: PricingCompareEntry): DomainResult {
     checked_at: new Date().toISOString(),
     premium_reason: entry.premium ? 'Premium domain' : undefined,
   };
+
+  applyPricingMetadata(result);
+  return result;
 }
 
 function mergePricing(
@@ -456,7 +527,19 @@ function mergePricing(
     if (!result.premium_reason) {
       result.premium_reason = 'Premium domain';
     }
+    if (!result.aftermarket) {
+      result.aftermarket = {
+        type: 'premium',
+        price: result.price_first_year,
+        currency: result.currency ?? null,
+        source: 'pricing_api',
+        url: buildRegistrarPriceUrl(result.registrar, result.domain) || undefined,
+        note: 'Premium pricing detected. Verify at registrar checkout.',
+      };
+    }
   }
+
+  applyPricingMetadata(result);
 }
 
 async function applyPricingQuote(
@@ -466,27 +549,32 @@ async function applyPricingQuote(
   if (result.source === 'porkbun_api' || result.source === 'namecheap_api') {
     result.pricing_source = result.source as PricingSource;
     result.pricing_status = result.price_first_year !== null ? 'ok' : 'partial';
+    applyPricingMetadata(result);
     return;
   }
 
   if (!pricingBudget?.enabled) {
     result.pricing_status = 'not_configured';
+    applyPricingMetadata(result);
     return;
   }
 
   if (!result.available) {
     result.pricing_status = 'not_available';
+    applyPricingMetadata(result);
     return;
   }
 
   if (!pricingBudget.take()) {
     result.pricing_status = 'not_available';
+    applyPricingMetadata(result);
     return;
   }
 
   const payload = await fetchPricingQuote(result.domain);
   if (!payload) {
     result.pricing_status = 'error';
+    applyPricingMetadata(result);
     return;
   }
 
@@ -598,6 +686,8 @@ function generateInsights(
     insights.push(`⚠️ Could not check some TLDs: ${errors.join(', ')}`);
   }
 
+  insights.push(PRICE_WARNING);
+
   return insights;
 }
 
@@ -681,6 +771,12 @@ function generateNextSteps(results: DomainResult[]): string[] {
     } else {
       nextSteps.push(
         `Register ${best.domain} at ${best.registrar} to secure it`,
+      );
+    }
+
+    if (best.price_check_url) {
+      nextSteps.push(
+        `Verify pricing for ${best.domain}: ${best.price_check_url}`,
       );
     }
   }

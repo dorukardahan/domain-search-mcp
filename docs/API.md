@@ -23,10 +23,20 @@ interface SearchDomainResponse {
     available: boolean;
     price_first_year: number | null;
     price_renewal: number | null;
+    price_check_url?: string;
+    price_note?: string;
     privacy_included: boolean;
     registrar: string | null;
     source: "porkbun_api" | "namecheap_api" | "godaddy_api" | "rdap" | "whois" | "pricing_api" | "catalog";
     premium: boolean;
+    aftermarket?: {
+      type: "auction" | "aftermarket" | "premium";
+      price: number | null;
+      currency: string | null;
+      source: string;
+      url?: string;
+      note?: string;
+    };
     pricing_source?: "pricing_api" | "catalog" | "porkbun_api" | "namecheap_api";
     pricing_status?: "ok" | "partial" | "not_configured" | "error" | "catalog_only" | "not_available";
     error?: string;
@@ -55,6 +65,7 @@ const result = await searchDomain({
 //   available: true,
 //   price_first_year: 8.95,
 //   price_renewal: 8.95,
+//   price_check_url: "https://porkbun.com/checkout/search?q=vibecoding.com",
 //   privacy_included: true,
 //   registrar: "porkbun",
 //   source: "rdap",
@@ -86,6 +97,8 @@ interface BulkSearchResponse {
     domain: string;
     available: boolean;
     price_first_year: number | null;
+    price_check_url?: string;
+    price_note?: string;
     error?: string;
   }>;
   summary: {
@@ -136,6 +149,16 @@ interface CompareRegistrarsResponse {
     price_renewal: number | null;
     price_transfer: number | null;
     currency: string | null;
+    price_check_url?: string;
+    price_note?: string;
+    aftermarket?: {
+      type: "auction" | "aftermarket" | "premium";
+      price: number | null;
+      currency: string | null;
+      source: string;
+      url?: string;
+      note?: string;
+    };
     pricing_source?: "pricing_api" | "catalog";
     pricing_status?: "ok" | "partial" | "not_configured" | "error" | "catalog_only" | "not_available";
   }>;

@@ -1,6 +1,6 @@
 {
   "name": "domain-search-mcp",
-  "version": "1.2.17",
+  "version": "1.2.18",
   "mcpName": "io.github.dorukardahan/domain-search-mcp",
   "description": "Fast domain availability MCP server. RDAP/WHOIS availability with backend pricing (Porkbun + Dynadot) and smart suggestions.",
   "main": "dist/server.js",

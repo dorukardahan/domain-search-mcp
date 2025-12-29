@@ -111,13 +111,20 @@ export async function executeBulkSearch(
       );
 
       const cheapest = available
-        .filter((r) => r.price_first_year !== null)
+        .filter(
+          (r) => r.price_first_year !== null && r.pricing_status === 'ok',
+        )
         .sort((a, b) => a.price_first_year! - b.price_first_year!)[0];
 
       if (cheapest) {
         insights.push(
           `💰 Best price: ${cheapest.domain} at $${cheapest.price_first_year}/year`,
         );
+        if (cheapest.price_check_url) {
+          insights.push(
+            `Verify pricing for ${cheapest.domain}: ${cheapest.price_check_url}`,
+          );
+        }
       }
     } else {
       insights.push(`❌ All ${domains.length} domains are taken`);
@@ -125,6 +132,10 @@ export async function executeBulkSearch(
         '💡 Try different variations or alternative TLDs',
       );
     }
+
+    insights.push(
+      '⚠️ Prices can change. Verify at registrar checkout links before purchase.',
+    );
 
     return {
       results,

@@ -144,6 +144,21 @@ export async function executeCompareRegistrars(
       );
     }
 
+    if (result.best_first_year?.registrar) {
+      const winner = result.comparisons.find(
+        (r) => r.registrar === result.best_first_year?.registrar,
+      );
+      if (winner?.price_check_url) {
+        insights.push(
+          `Verify pricing for ${fullDomain}: ${winner.price_check_url}`,
+        );
+      }
+    }
+
+    insights.push(
+      '⚠️ Prices can change. Verify at registrar checkout links before purchase.',
+    );
+
     return {
       domain: fullDomain,
       what_happened: `Compared pricing across ${result.comparisons.length} registrars`,

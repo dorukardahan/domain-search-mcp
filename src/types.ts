@@ -29,6 +29,12 @@ export interface DomainResult {
   /** Annual renewal price after first year */
   price_renewal: number | null;
 
+  /** Link to verify pricing at the registrar checkout/search page */
+  price_check_url?: string;
+
+  /** Notes about pricing accuracy or verification */
+  price_note?: string;
+
   /** Where pricing data came from (if any) */
   pricing_source?: PricingSource;
 
@@ -55,6 +61,16 @@ export interface DomainResult {
 
   /** If premium, explains why (e.g., "Popular keyword") */
   premium_reason?: string;
+
+  /** Aftermarket or auction details when detected */
+  aftermarket?: {
+    type: 'auction' | 'aftermarket' | 'premium';
+    price: number | null;
+    currency: string | null;
+    source: string;
+    url?: string;
+    note?: string;
+  };
 
   /** Any restrictions on this TLD (e.g., "Requires ID verification") */
   tld_restrictions?: string[];
