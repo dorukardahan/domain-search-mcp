@@ -186,6 +186,10 @@ npm test          # run Jest
 npm run build     # compile to dist/
 ```
 
+## Release
+
+See `docs/RELEASE.md` for the canary -> latest publish flow with provenance.
+
 ## Security Notes
 
 - Do not commit API keys or `.mcpregistry_*` files.

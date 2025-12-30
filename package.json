@@ -1,6 +1,6 @@
 {
   "name": "domain-search-mcp",
-  "version": "1.2.23",
+  "version": "1.2.24",
   "mcpName": "io.github.dorukardahan/domain-search-mcp",
   "description": "Fast domain availability MCP server. RDAP/WHOIS availability with backend pricing (Porkbun) and smart suggestions.",
   "main": "dist/server.js",
@@ -19,7 +19,10 @@
     "coverage": "jest --coverage",
     "lint": "eslint src/**/*.ts",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "release:canary": "npm publish --tag canary --provenance",
+    "release:latest": "npm publish --tag latest --provenance",
+    "release:promote-latest": "node -e \"const v=require('./package.json').version; require('child_process').execSync('npm dist-tag add domain-search-mcp@'+v+' latest',{stdio:'inherit'})\""
   },
   "keywords": [
     "mcp",
