@@ -41,7 +41,8 @@ Responses include `price_check_url` (registrar checkout/search link) and may inc
 checkout page before purchase.
 
 If an auction/premium signal is detected, results include an `aftermarket` block with
-links to marketplace pages when available.
+links to marketplace pages when available. Taken domains may also include Sedo
+auction hints when the public feed is enabled.
 
 ## Quick Start
 
@@ -137,6 +138,9 @@ NAMECHEAP_CLIENT_IP=your_whitelisted_ip
 | `LOG_LEVEL` | info | Logging level |
 | `CACHE_TTL_AVAILABILITY` | 60 | Availability cache TTL (seconds) |
 | `CACHE_TTL_PRICING` | 3600 | Pricing cache TTL (seconds) |
+| `CACHE_TTL_SEDO` | 3600 | Sedo auctions feed cache TTL (seconds) |
+| `SEDO_FEED_ENABLED` | true | Enable Sedo feed lookup for aftermarket hints |
+| `SEDO_FEED_URL` | https://sedo.com/txt/auctions_us.txt | Sedo public feed URL |
 
 ### Output Format
 
@@ -157,6 +161,7 @@ OUTPUT_FORMAT=json
 | RDAP | Primary availability | No |
 | WHOIS | Fallback availability | No |
 | GoDaddy public endpoint | Premium/auction signal for `search_domain` | No |
+| Sedo public feed | Aftermarket auction hints | No |
 
 ## Pricing Behavior
 

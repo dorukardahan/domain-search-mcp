@@ -53,6 +53,7 @@ import {
   suggestPremiumAlternatives,
 } from '../utils/premium-analyzer.js';
 import type { PricingStatus, PricingSource } from '../types.js';
+import { lookupSedoAuction } from '../aftermarket/sedo.js';
 
 const SEARCH_TLD_CONCURRENCY = 10;
 const BULK_CONCURRENCY = 20;
@@ -116,8 +117,21 @@ function buildAftermarketUrl(domain: string): string {
   return `https://auctions.godaddy.com/trpSearchResults.aspx?domain=${encodeURIComponent(domain)}`;
 }
 
-function applyAftermarketFallback(result: DomainResult): void {
+async function applyAftermarketFallback(result: DomainResult): Promise<void> {
   if (result.available || result.aftermarket) {
+    return;
+  }
+
+  const sedoListing = await lookupSedoAuction(result.domain);
+  if (sedoListing) {
+    result.aftermarket = {
+      type: 'auction',
+      price: sedoListing.price,
+      currency: sedoListing.currency,
+      source: sedoListing.source,
+      url: sedoListing.url,
+      note: 'Listed in Sedo auctions feed. Verify details at the marketplace link.',
+    };
     return;
   }
 
@@ -380,7 +394,7 @@ async function searchSingleDomain(
     }
 
     applyPricingMetadata(fallbackResult);
-    applyAftermarketFallback(fallbackResult);
+    await applyAftermarketFallback(fallbackResult);
 
     const cacheKey = domainCacheKey(fullDomain, fallbackResult.source);
     const ttlMs = fallbackResult.available ? CACHE_TTL_AVAILABLE_MS : CACHE_TTL_TAKEN_MS;
@@ -536,7 +550,6 @@ function compareEntryToResult(entry: PricingCompareEntry): DomainResult {
   }
 
   applyPricingMetadata(result);
-  applyAftermarketFallback(result);
   return result;
 }
 
@@ -611,28 +624,28 @@ async function applyPricingQuote(
     result.pricing_source = result.source as PricingSource;
     result.pricing_status = result.price_first_year !== null ? 'ok' : 'partial';
     applyPricingMetadata(result);
-    applyAftermarketFallback(result);
+    await applyAftermarketFallback(result);
     return;
   }
 
   if (!pricingBudget?.enabled) {
     result.pricing_status = 'not_configured';
     applyPricingMetadata(result);
-    applyAftermarketFallback(result);
+    await applyAftermarketFallback(result);
     return;
   }
 
   if (!result.available) {
     result.pricing_status = 'not_available';
     applyPricingMetadata(result);
-    applyAftermarketFallback(result);
+    await applyAftermarketFallback(result);
     return;
   }
 
   if (!pricingBudget.take()) {
     result.pricing_status = 'not_available';
     applyPricingMetadata(result);
-    applyAftermarketFallback(result);
+    await applyAftermarketFallback(result);
     return;
   }
 
@@ -640,12 +653,12 @@ async function applyPricingQuote(
   if (!payload) {
     result.pricing_status = 'error';
     applyPricingMetadata(result);
-    applyAftermarketFallback(result);
+    await applyAftermarketFallback(result);
     return;
   }
 
   mergePricing(result, payload);
-  applyAftermarketFallback(result);
+  await applyAftermarketFallback(result);
 }
 
 /**

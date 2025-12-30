@@ -276,6 +276,7 @@ export interface Config {
   cache: {
     availabilityTtl: number;
     pricingTtl: number;
+    sedoTtl: number;
   };
 
   // Rate limiting
@@ -290,6 +291,12 @@ export interface Config {
 
   // Output format for tool results
   outputFormat: 'table' | 'json' | 'both';
+
+  // Aftermarket data sources
+  aftermarket: {
+    sedoEnabled: boolean;
+    sedoFeedUrl: string;
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

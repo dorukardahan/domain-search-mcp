@@ -88,6 +88,7 @@ export function loadConfig(): Config {
     cache: {
       availabilityTtl: parseIntWithDefault(env.CACHE_TTL_AVAILABILITY, 60),
       pricingTtl: parseIntWithDefault(env.CACHE_TTL_PRICING, 3600),
+      sedoTtl: parseIntWithDefault(env.CACHE_TTL_SEDO, 3600),
     },
     rateLimitPerMinute: parseIntWithDefault(env.RATE_LIMIT_PER_MINUTE, 60),
     allowedTlds: parseList(env.ALLOWED_TLDS, [
@@ -112,6 +113,11 @@ export function loadConfig(): Config {
     ]),
     dryRun: parseBool(env.DRY_RUN, false),
     outputFormat: parseOutputFormat(env.OUTPUT_FORMAT),
+    aftermarket: {
+      sedoEnabled: parseBool(env.SEDO_FEED_ENABLED, true),
+      sedoFeedUrl:
+        env.SEDO_FEED_URL || 'https://sedo.com/txt/auctions_us.txt',
+    },
   };
 
   return config;

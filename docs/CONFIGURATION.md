@@ -49,6 +49,11 @@ The server automatically selects the best available source:
 4. **WHOIS** - Last resort (slow)
 5. **GoDaddy public endpoint** - Premium/auction signals in `search_domain` only
 
+## Aftermarket Signals
+
+The MCP can flag taken domains that appear in the Sedo public auctions feed.
+This is a best-effort signal and should be verified at the marketplace link.
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -68,6 +73,9 @@ The server automatically selects the best available source:
 | `LOG_LEVEL` | info | Logging level |
 | `CACHE_TTL_AVAILABILITY` | 60 | Cache TTL (seconds) for available results (taken results use ~2x) |
 | `CACHE_TTL_PRICING` | 3600 | Pricing cache TTL |
+| `CACHE_TTL_SEDO` | 3600 | Sedo auctions feed cache TTL |
+| `SEDO_FEED_ENABLED` | true | Enable Sedo feed lookup for aftermarket hints |
+| `SEDO_FEED_URL` | https://sedo.com/txt/auctions_us.txt | Sedo public feed URL |
 
 ## Claude Desktop Setup
 
@@ -144,6 +152,7 @@ Results are cached in memory:
 
 - Availability: 60s (taken results ~120s)
 - Pricing: 1 hour
+- Sedo auctions feed: 1 hour
 - TLD info: 24 hours
 
 Configure via environment:
@@ -151,6 +160,7 @@ Configure via environment:
 ```bash
 CACHE_TTL_AVAILABILITY=60  # seconds
 CACHE_TTL_PRICING=3600
+CACHE_TTL_SEDO=3600
 ```
 
 ## Verifying Setup
