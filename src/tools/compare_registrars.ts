@@ -26,7 +26,7 @@ export const compareRegistrarsSchema = z.object({
     .array(z.string())
     .optional()
     .describe(
-      "Registrars to compare (e.g., ['porkbun', 'dynadot']). Defaults to all available.",
+      "Registrars to compare (e.g., ['porkbun']). Defaults to all available.",
     ),
 });
 
@@ -49,7 +49,7 @@ Uses the Pricing API when configured; otherwise falls back to BYOK registrars.
 Returns pricing comparison and a recommendation.
 
 Example:
-- compare_registrars("vibecoding", "com") → compares Porkbun vs Dynadot`,
+- compare_registrars("vibecoding", "com") → compares Porkbun (and any configured BYOK registrars)`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -65,7 +65,7 @@ Example:
         type: 'array',
         items: { type: 'string' },
         description:
-          "Registrars to compare. Defaults to ['porkbun', 'dynadot'].",
+          "Registrars to compare. Defaults to ['porkbun'].",
       },
     },
     required: ['domain', 'tld'],

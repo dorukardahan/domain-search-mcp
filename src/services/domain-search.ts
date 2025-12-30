@@ -102,8 +102,6 @@ function buildRegistrarPriceUrl(
   switch (normalized) {
     case 'porkbun':
       return `https://porkbun.com/checkout/search?q=${encodeURIComponent(domain)}`;
-    case 'dynadot':
-      return `https://www.dynadot.com/domain/search?domain=${encodeURIComponent(domain)}`;
     case 'namecheap':
       return `https://www.namecheap.com/domains/registration/results/?domain=${encodeURIComponent(domain)}`;
     case 'godaddy':
@@ -919,7 +917,7 @@ export async function bulkSearchDomains(
 export async function compareRegistrars(
   domain: string,
   tld: string,
-  registrars: string[] = ['porkbun', 'dynadot'],
+  registrars: string[] = ['porkbun'],
 ): Promise<{
   comparisons: DomainResult[];
   best_first_year: { registrar: string; price: number } | null;

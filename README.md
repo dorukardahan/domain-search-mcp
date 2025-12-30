@@ -29,7 +29,7 @@ Availability and pricing are intentionally separated:
   - Fallback: WHOIS
   - GoDaddy public endpoint is used only to add premium/auction signals in `search_domain`
 - Pricing (optional):
-  - Recommended: `PRICING_API_BASE_URL` (backend with Porkbun + Dynadot keys)
+  - Recommended: `PRICING_API_BASE_URL` (backend with Porkbun keys)
   - Optional BYOK: Porkbun/Namecheap only when backend is not configured
 
 This keeps the server zero-config while letting power users enable pricing.
@@ -91,7 +91,7 @@ npx domain-search-mcp
 
 ### Pricing Backend (Recommended)
 
-Set a backend URL that owns registrar keys (Porkbun + Dynadot). The MCP will call
+Set a backend URL that owns registrar keys (Porkbun). The MCP will call
 `/api/quote` and `/api/compare` on that backend for pricing.
 
 ```bash
@@ -151,7 +151,7 @@ OUTPUT_FORMAT=json
 
 | Source | Usage | Pricing |
 |--------|-------|---------|
-| Pricing API | Pricing + premium (Porkbun + Dynadot) | Yes (backend) |
+| Pricing API | Pricing + premium (Porkbun) | Yes (backend) |
 | Porkbun API | Availability + pricing | Yes (with keys) |
 | Namecheap API | Availability + pricing | Yes (with keys) |
 | RDAP | Primary availability | No |

@@ -95,7 +95,6 @@ export interface DomainResult {
 export type DataSource =
   | 'porkbun_api'
   | 'namecheap_api'
-  | 'dynadot_api'
   | 'godaddy_api'
   | 'rdap'
   | 'whois'
@@ -109,7 +108,6 @@ export type DataSource =
 export type PricingSource =
   | 'porkbun_api'
   | 'namecheap_api'
-  | 'dynadot_api'
   | 'pricing_api'
   | 'catalog';
 
