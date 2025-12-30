@@ -24,18 +24,38 @@ function formatMoney(value: number | null, currency: string): string {
   return `${currency} ${value.toFixed(2)}`;
 }
 
-function formatPriceFirstYear(result: DomainResult): string {
+function formatPriceSummary(result: DomainResult): string {
   if (result.price_first_year === null) return 'N/A';
-  return `${formatMoney(result.price_first_year, result.currency)}/yr`;
+  const first = formatMoney(result.price_first_year, result.currency);
+  if (result.price_renewal === null) {
+    return first;
+  }
+  const renewal = formatMoney(result.price_renewal, result.currency);
+  return `${first} / ${renewal} renew`;
 }
 
-function formatAftermarket(result: DomainResult): string {
-  if (!result.aftermarket) return '-';
-  const price =
-    result.aftermarket.price === null || result.aftermarket.currency === null
-      ? ''
-      : ` ${formatMoney(result.aftermarket.price, result.aftermarket.currency)}`;
-  return `${result.aftermarket.type}${price}`;
+function formatPriceFirstYear(result: DomainResult): string {
+  if (result.price_first_year === null) return 'N/A';
+  return formatMoney(result.price_first_year, result.currency);
+}
+
+function formatPricingLabel(result: DomainResult): string {
+  switch (result.pricing_status) {
+    case 'ok':
+      return 'current';
+    case 'partial':
+      return 'recent';
+    case 'catalog_only':
+      return 'estimate';
+    case 'not_available':
+      return 'rate-limited';
+    case 'not_configured':
+      return 'no-backend';
+    case 'error':
+      return 'error';
+    default:
+      return '-';
+  }
 }
 
 function formatLinks(result: DomainResult): string {
@@ -44,7 +64,11 @@ function formatLinks(result: DomainResult): string {
     links.push(`[price](${result.price_check_url})`);
   }
   if (result.aftermarket?.url) {
-    links.push(`[${result.aftermarket.type}](${result.aftermarket.url})`);
+    const label =
+      result.aftermarket.source === 'sedo'
+        ? 'sedo'
+        : result.aftermarket.type;
+    links.push(`[${label}](${result.aftermarket.url})`);
   }
   return links.length > 0 ? links.join(' ') : '-';
 }
@@ -56,23 +80,17 @@ function renderTable(headers: string[], rows: string[][]): string {
   return [headerRow, separator, body].filter(Boolean).join('\n');
 }
 
+const PRICE_DISCLAIMER =
+  'Note: Prices can change. Always verify at registrar checkout links.';
+
 function formatDomainResultsTable(results: DomainResult[]): string {
-  const headers = [
-    'Domain',
-    'Status',
-    'Price',
-    'Pricing',
-    'Registrar',
-    'Aftermarket',
-    'Links',
-  ];
+  const headers = ['Domain', 'Status', 'Price', 'Pricing', 'Registrar', 'Links'];
   const rows = results.map((result) => [
     result.domain,
     result.available ? 'Available' : 'Taken',
-    formatPriceFirstYear(result),
-    result.pricing_status || '-',
+    formatPriceSummary(result),
+    formatPricingLabel(result),
     result.registrar || 'unknown',
-    formatAftermarket(result),
     formatLinks(result),
   ]);
   return renderTable(headers, rows);
@@ -81,6 +99,7 @@ function formatDomainResultsTable(results: DomainResult[]): string {
 function formatSearchResponse(result: SearchResponse): string {
   const sections: string[] = [];
   sections.push(formatDomainResultsTable(result.results));
+  sections.push(PRICE_DISCLAIMER);
   if (result.insights?.length) {
     sections.push(`\nInsights:\n- ${result.insights.join('\n- ')}`);
   }
@@ -99,6 +118,7 @@ function formatBulkResponse(result: { results: DomainResult[]; summary?: Record<
     sections.push(`Summary: ${summaryParts}`);
   }
   sections.push(formatDomainResultsTable(result.results));
+  sections.push(PRICE_DISCLAIMER);
   if (result.insights?.length) {
     sections.push(`\nInsights:\n- ${result.insights.join('\n- ')}`);
   }
@@ -112,12 +132,13 @@ function formatComparison(result: RegistrarComparison): string {
     formatPriceFirstYear(entry),
     entry.price_renewal === null ? 'N/A' : formatMoney(entry.price_renewal, entry.currency),
     entry.premium ? 'Yes' : 'No',
-    entry.pricing_status || '-',
+    formatPricingLabel(entry),
     formatLinks(entry),
   ]);
   const sections: string[] = [];
   sections.push(`Comparison for ${result.domain}`);
   sections.push(renderTable(headers, rows));
+  sections.push(PRICE_DISCLAIMER);
   if (result.best_first_year) {
     sections.push(
       `Best first year: ${result.best_first_year.registrar} at ${formatMoney(
@@ -153,6 +174,7 @@ function formatSuggestions(result: {
   ]);
   const sections: string[] = [];
   sections.push(renderTable(headers, rows));
+  sections.push(PRICE_DISCLAIMER);
   if (result.insights?.length) {
     sections.push(`\nInsights:\n- ${result.insights.join('\n- ')}`);
   }
@@ -171,6 +193,9 @@ function formatSmartSuggestions(result: {
   if (result.results.premium.length > 0) {
     sections.push('\nPremium');
     sections.push(formatDomainResultsTable(result.results.premium));
+  }
+  if (result.results.available.length > 0 || result.results.premium.length > 0) {
+    sections.push(PRICE_DISCLAIMER);
   }
   if (result.results.unavailable_count > 0) {
     sections.push(`\nUnavailable: ${result.results.unavailable_count}`);

@@ -9,6 +9,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 - -
 
+## [1.2.27] - 2025-12-30
+### Added
+- Nameserver-based aftermarket hints (Sedo/Dan/Afternic) with cache + timeout controls.
+- RDAP bootstrap caching with IANA fallback reuse.
+- Compact table output with pricing labels and link consolidation.
+- Tests for Sedo parsing, RDAP bootstrap cache, and table formatting.
+
 ## [1.2.26] - 2025-12-30
 ### Added
 - Release Drafter automation for release notes (labels -> changelog).
@@ -29,7 +36,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Changed
 - Removed Dynadot backend usage due to ToS restrictions.
 
-[Unreleased]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.26...HEAD
+[Unreleased]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.27...HEAD
+[1.2.27]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.26...v1.2.27
 [1.2.26]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.25...v1.2.26
 [1.2.25]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.24...v1.2.25
 [1.2.24]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.23...v1.2.24

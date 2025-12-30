@@ -117,6 +117,12 @@ export function loadConfig(): Config {
       sedoEnabled: parseBool(env.SEDO_FEED_ENABLED, true),
       sedoFeedUrl:
         env.SEDO_FEED_URL || 'https://sedo.com/txt/auctions_us.txt',
+      nsEnabled: parseBool(env.AFTERMARKET_NS_ENABLED, true),
+      nsCacheTtl: parseIntWithDefault(
+        env.CACHE_TTL_AFTERMARKET_NS,
+        parseIntWithDefault(env.CACHE_TTL_AVAILABILITY, 60),
+      ),
+      nsTimeoutMs: parseIntWithDefault(env.AFTERMARKET_NS_TIMEOUT_MS, 1500),
     },
   };
 

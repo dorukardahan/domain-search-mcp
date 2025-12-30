@@ -6,12 +6,12 @@
     "url": "https://github.com/dorukardahan/domain-search-mcp",
     "source": "github"
   },
-  "version": "1.2.26",
+  "version": "1.2.27",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "domain-search-mcp",
-      "version": "1.2.26",
+      "version": "1.2.27",
       "transport": {
         "type": "stdio"
       },

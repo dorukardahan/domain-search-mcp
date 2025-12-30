@@ -296,6 +296,9 @@ export interface Config {
   aftermarket: {
     sedoEnabled: boolean;
     sedoFeedUrl: string;
+    nsEnabled: boolean;
+    nsCacheTtl: number;
+    nsTimeoutMs: number;
   };
 }
 

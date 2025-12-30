@@ -63,6 +63,7 @@ const RdapDomainResponseSchema = z.object({
  * RDAP bootstrap URLs for different TLDs.
  */
 const RDAP_BOOTSTRAP = 'https://data.iana.org/rdap/dns.json';
+const RDAP_BOOTSTRAP_TTL_SECONDS = 86400;
 
 const RDAP_TIMEOUT_MS = 800;
 const RDAP_ERROR_TTL_MS = 10_000;
@@ -137,9 +138,13 @@ const RDAP_SERVERS: Record<string, string> = {
 };
 
 /**
- * Cache for RDAP server lookups.
+ * Cache for RDAP bootstrap data (IANA).
  */
-let rdapServerCache: Record<string, string> | null = null;
+const rdapBootstrapCache = new TtlCache<Record<string, string>>(
+  RDAP_BOOTSTRAP_TTL_SECONDS,
+  2,
+);
+let rdapBootstrapFallback: Record<string, string> | null = null;
 const rdapErrorCache = new TtlCache<boolean>(10, 5000);
 const rdapGlobalLimiter = new ConcurrencyLimiter(RDAP_GLOBAL_CONCURRENCY);
 const rdapHostLimiter = new KeyedLimiter(RDAP_HOST_CONCURRENCY);
@@ -153,24 +158,32 @@ async function getRdapServer(tld: string): Promise<string | null> {
     return RDAP_SERVERS[tld];
   }
 
+  const cached = rdapBootstrapCache.get('bootstrap');
+  if (cached) {
+    return cached[tld] || null;
+  }
+
   // Try to fetch from IANA bootstrap
   try {
-    if (!rdapServerCache) {
-      const response = await axios.get<{
-        services: [string[], string[]][];
-      }>(RDAP_BOOTSTRAP, { timeout: 5000 });
+    const response = await axios.get<{
+      services: [string[], string[]][];
+    }>(RDAP_BOOTSTRAP, { timeout: 5000 });
 
-      rdapServerCache = {};
-      for (const [tlds, servers] of response.data.services) {
-        for (const t of tlds) {
-          rdapServerCache[t] = servers[0] || '';
-        }
+    const map: Record<string, string> = {};
+    for (const [tlds, servers] of response.data.services) {
+      for (const t of tlds) {
+        map[t] = servers[0] || '';
       }
     }
 
-    return rdapServerCache[tld] || null;
+    rdapBootstrapCache.set('bootstrap', map);
+    rdapBootstrapFallback = map;
+    return map[tld] || null;
   } catch {
     logger.debug('Failed to fetch RDAP bootstrap', { tld });
+    if (rdapBootstrapFallback) {
+      return rdapBootstrapFallback[tld] || null;
+    }
     return null;
   }
 }

@@ -35,7 +35,7 @@ function buildSedoSearchUrl(domain: string): string {
   return `https://sedo.com/search/?keyword=${encodeURIComponent(domain)}`;
 }
 
-function parseLine(line: string): SedoAuctionListing | null {
+export function parseSedoLine(line: string): SedoAuctionListing | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   const parts = trimmed.split(';');
@@ -62,6 +62,17 @@ function parseLine(line: string): SedoAuctionListing | null {
   };
 }
 
+export function parseSedoFeed(text: string): SedoIndex {
+  const index: SedoIndex = new Map();
+  for (const line of text.split('\n')) {
+    const listing = parseSedoLine(line);
+    if (listing) {
+      index.set(listing.domain, listing);
+    }
+  }
+  return index;
+}
+
 async function fetchSedoFeed(): Promise<SedoIndex> {
   const cached = feedCache.get(FEED_CACHE_KEY);
   if (cached) return cached;
@@ -77,13 +88,7 @@ async function fetchSedoFeed(): Promise<SedoIndex> {
       throw new Error(`Sedo feed HTTP ${response.status}`);
     }
     const text = await response.text();
-    const index: SedoIndex = new Map();
-    for (const line of text.split('\n')) {
-      const listing = parseLine(line);
-      if (listing) {
-        index.set(listing.domain, listing);
-      }
-    }
+    const index = parseSedoFeed(text);
     feedCache.set(FEED_CACHE_KEY, index);
     return index;
   } finally {

@@ -74,8 +74,11 @@ This is a best-effort signal and should be verified at the marketplace link.
 | `CACHE_TTL_AVAILABILITY` | 60 | Cache TTL (seconds) for available results (taken results use ~2x) |
 | `CACHE_TTL_PRICING` | 3600 | Pricing cache TTL |
 | `CACHE_TTL_SEDO` | 3600 | Sedo auctions feed cache TTL |
+| `CACHE_TTL_AFTERMARKET_NS` | 300 | Nameserver lookup cache TTL |
 | `SEDO_FEED_ENABLED` | true | Enable Sedo feed lookup for aftermarket hints |
 | `SEDO_FEED_URL` | https://sedo.com/txt/auctions_us.txt | Sedo public feed URL |
+| `AFTERMARKET_NS_ENABLED` | true | Enable nameserver-based aftermarket hints |
+| `AFTERMARKET_NS_TIMEOUT_MS` | 1500 | Nameserver lookup timeout |
 
 ## Claude Desktop Setup
 
@@ -153,6 +156,7 @@ Results are cached in memory:
 - Availability: 60s (taken results ~120s)
 - Pricing: 1 hour
 - Sedo auctions feed: 1 hour
+- Nameserver lookup: 5 minutes
 - TLD info: 24 hours
 
 Configure via environment:
@@ -161,6 +165,7 @@ Configure via environment:
 CACHE_TTL_AVAILABILITY=60  # seconds
 CACHE_TTL_PRICING=3600
 CACHE_TTL_SEDO=3600
+CACHE_TTL_AFTERMARKET_NS=300
 ```
 
 ## Verifying Setup

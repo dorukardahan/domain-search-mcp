@@ -54,6 +54,7 @@ import {
 } from '../utils/premium-analyzer.js';
 import type { PricingStatus, PricingSource } from '../types.js';
 import { lookupSedoAuction } from '../aftermarket/sedo.js';
+import { lookupAftermarketByNameserver } from '../aftermarket/nameservers.js';
 
 const SEARCH_TLD_CONCURRENCY = 10;
 const BULK_CONCURRENCY = 20;
@@ -75,8 +76,6 @@ type SearchOptions = {
   includeGodaddySignals?: boolean;
 };
 
-const PRICE_WARNING =
-  '⚠️ Prices can change. Verify at registrar checkout links before purchase.';
 
 function createPricingBudget(options?: PricingOptions): PricingBudget {
   const enabled = options?.enabled ?? config.pricingApi.enabled;
@@ -132,6 +131,12 @@ async function applyAftermarketFallback(result: DomainResult): Promise<void> {
       url: sedoListing.url,
       note: 'Listed in Sedo auctions feed. Verify details at the marketplace link.',
     };
+    return;
+  }
+
+  const nsListing = await lookupAftermarketByNameserver(result.domain);
+  if (nsListing) {
+    result.aftermarket = nsListing;
     return;
   }
 
@@ -765,8 +770,6 @@ function generateInsights(
   if (errors.length > 0) {
     insights.push(`⚠️ Could not check some TLDs: ${errors.join(', ')}`);
   }
-
-  insights.push(PRICE_WARNING);
 
   return insights;
 }
