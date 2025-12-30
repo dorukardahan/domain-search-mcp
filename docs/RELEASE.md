@@ -5,6 +5,7 @@ Use this flow to publish safely and keep MCP clients stable.
 ## Checklist
 
 - Bump versions in `package.json`, `package-lock.json`, and `server.json`.
+- Update `CHANGELOG.md` (add a new version section).
 - Run `npm run test` (or at least `npm run build`).
 - Ensure GitHub secret `NPM_TOKEN` is set (used by CI).
 - Confirm no secrets are included in the package (`npm pack --dry-run` if needed).

@@ -191,6 +191,10 @@ npm run build     # compile to dist/
 See `docs/RELEASE.md` for the canary -> latest publish flow. Tags like `v1.2.24`
 trigger GitHub Releases + npm publish via CI.
 
+## Changelog
+
+See `CHANGELOG.md` for release history.
+
 ## Security Notes
 
 - Do not commit API keys or `.mcpregistry_*` files.
