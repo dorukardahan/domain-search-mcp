@@ -8,6 +8,7 @@ Use this flow to publish safely and keep MCP clients stable.
 - Update `CHANGELOG.md` (add a new version section).
 - Run `npm run test` (or at least `npm run build`).
 - Ensure GitHub secret `NPM_TOKEN` is set (used by CI).
+- Label PRs so Release Drafter can generate clean notes (see below).
 - Confirm no secrets are included in the package (`npm pack --dry-run` if needed).
 
 ## Canary Publish (Local)
@@ -40,6 +41,19 @@ Create a git tag and push it. CI will publish with provenance and create a GitHu
 git tag v1.2.24
 git push origin v1.2.24
 ```
+
+## Release Drafter Labels
+
+Use these labels so release notes are auto-generated cleanly:
+
+- `breaking`
+- `feature`, `enhancement`
+- `fix`, `bug`
+- `docs`
+- `chore`, `refactor`
+- `security`
+
+Use `skip-changelog` to exclude a PR from release notes.
 
 ## Notes
 

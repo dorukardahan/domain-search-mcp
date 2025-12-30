@@ -34,7 +34,10 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Publish release notes
+        uses: release-drafter/release-drafter@v6
         with:
-          generate_release_notes: true
+          publish: true
+          tag: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

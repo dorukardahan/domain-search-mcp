@@ -1,0 +1,56 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+
+categories:
+  - title: "Breaking Changes"
+    labels:
+      - "breaking"
+  - title: "Features"
+    labels:
+      - "feature"
+      - "enhancement"
+  - title: "Fixes"
+    labels:
+      - "fix"
+      - "bug"
+  - title: "Docs"
+    labels:
+      - "docs"
+  - title: "Chore"
+    labels:
+      - "chore"
+      - "refactor"
+  - title: "Security"
+    labels:
+      - "security"
+
+change-template: "- $TITLE (#$NUMBER) by @$AUTHOR"
+
+version-resolver:
+  major:
+    labels:
+      - "breaking"
+  minor:
+    labels:
+      - "feature"
+      - "enhancement"
+  patch:
+    labels:
+      - "fix"
+      - "bug"
+      - "docs"
+      - "chore"
+      - "refactor"
+      - "security"
+  default: patch
+
+exclude-labels:
+  - "skip-changelog"
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  ## Full Changelog
+  https://github.com/dorukardahan/domain-search-mcp/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

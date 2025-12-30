@@ -9,6 +9,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 - -
 
+## [1.2.26] - 2025-12-30
+### Added
+- Release Drafter automation for release notes (labels -> changelog).
+
 ## [1.2.25] - 2025-12-30
 ### Added
 - GitHub Actions release workflow that publishes with provenance and creates GitHub Releases.
@@ -25,7 +29,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Changed
 - Removed Dynadot backend usage due to ToS restrictions.
 
-[Unreleased]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.25...HEAD
+[Unreleased]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.26...HEAD
+[1.2.26]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.25...v1.2.26
 [1.2.25]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.24...v1.2.25
 [1.2.24]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.23...v1.2.24
 [1.2.23]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.22...v1.2.23
