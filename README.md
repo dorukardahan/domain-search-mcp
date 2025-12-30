@@ -188,7 +188,8 @@ npm run build     # compile to dist/
 
 ## Release
 
-See `docs/RELEASE.md` for the canary -> latest publish flow with provenance.
+See `docs/RELEASE.md` for the canary -> latest publish flow. Tags like `v1.2.24`
+trigger GitHub Releases + npm publish via CI.
 
 ## Security Notes
 
