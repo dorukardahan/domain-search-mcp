@@ -175,7 +175,47 @@ const COMMON_WORDS = new Set([
   'chef', 'cook', 'kitchen', 'bakery', 'grill', 'diner', 'bistro', 'eatery',
   // Common compound parts
   'assistant', 'manager', 'finder', 'maker', 'builder', 'tracker', 'planner',
+  // Crypto / tracking specific
+  'chain', 'block', 'onchain', 'alert', 'alerts', 'signal', 'signals', 'whale',
+  'wallet', 'oracle', 'monitor', 'tracker', 'scan', 'pulse', 'beacon', 'sentry',
 ]);
+
+/**
+ * Stopwords to ignore when generating suggestions.
+ */
+const STOPWORDS = new Set([
+  'and', 'with', 'for', 'the', 'of', 'in', 'on', 'to', 'from', 'by',
+  'a', 'an', 'or', 'project', 'codename', 'name', 'domain',
+]);
+
+/**
+ * Short tokens allowed as meaningful words.
+ */
+const SHORT_ALLOW = new Set(['ai', 'io', 'ml', 'vr', 'xr', 'nft', 'defi', 'dao', 'dex', 'id', 'gm']);
+
+const INDUSTRY_TERM_SET = new Set(
+  Object.values(INDUSTRY_TERMS).flat(),
+);
+
+function filterSuggestionWords(words: string[]): string[] {
+  const unique = new Set<string>();
+  for (const word of words) {
+    const normalized = word.toLowerCase();
+    if (!normalized || STOPWORDS.has(normalized)) continue;
+
+    const isShortAllowed = SHORT_ALLOW.has(normalized);
+    const isMeaningful =
+      COMMON_WORDS.has(normalized) ||
+      Object.prototype.hasOwnProperty.call(SYNONYMS, normalized) ||
+      INDUSTRY_TERM_SET.has(normalized);
+
+    if (!isShortAllowed && normalized.length < 3) continue;
+    if (!isMeaningful && normalized.length < 4) continue;
+
+    unique.add(normalized);
+  }
+  return [...unique];
+}
 
 /**
  * Attempt to segment a concatenated string into words.
@@ -324,16 +364,21 @@ export function generateSmartSuggestions(
   // Add original
   suggestions.add(normalized);
 
-  // Segment into words
-  const words = segmentWords(normalized);
+  // Segment into words and filter low-quality fragments
+  const rawWords = segmentWords(normalized);
+  const words = filterSuggestionWords(rawWords);
+  const fallbackWords =
+    words.length > 0
+      ? words
+      : rawWords.filter((word) => word.length >= 4 && !STOPWORDS.has(word));
 
   // Detect or use provided industry
-  const detectedIndustry = industry || detectIndustry(words);
+  const detectedIndustry = industry || detectIndustry(fallbackWords);
 
   // 1. Modern prefix variations
   for (const prefix of MODERN_PREFIXES.slice(0, 15)) {
     suggestions.add(prefix + normalized);
-    for (const word of words) {
+    for (const word of fallbackWords) {
       if (word.length >= 3) {
         suggestions.add(prefix + word);
       }
@@ -343,7 +388,7 @@ export function generateSmartSuggestions(
   // 2. Modern suffix variations
   for (const suffix of MODERN_SUFFIXES.slice(0, 15)) {
     suggestions.add(normalized + suffix);
-    for (const word of words) {
+    for (const word of fallbackWords) {
       if (word.length >= 3) {
         suggestions.add(word + suffix);
       }
@@ -352,7 +397,7 @@ export function generateSmartSuggestions(
 
   // 3. Synonym-based suggestions
   if (includeSynonyms) {
-    for (const word of words) {
+    for (const word of fallbackWords) {
       const synonyms = getSynonyms(word);
       for (const synonym of synonyms.slice(0, 3)) {
         // Replace word with synonym
@@ -373,7 +418,7 @@ export function generateSmartSuggestions(
     for (const term of industryTerms.slice(0, 8)) {
       suggestions.add(normalized + term);
       suggestions.add(term + normalized);
-      for (const word of words) {
+      for (const word of fallbackWords) {
         if (word.length >= 3) {
           suggestions.add(word + term);
           suggestions.add(term + word);
@@ -383,9 +428,9 @@ export function generateSmartSuggestions(
   }
 
   // 5. Portmanteau suggestions
-  if (includePortmanteau && words.length >= 2) {
-    for (let i = 0; i < words.length - 1; i++) {
-      const blends = generatePortmanteau(words[i]!, words[i + 1]!);
+  if (includePortmanteau && fallbackWords.length >= 2) {
+    for (let i = 0; i < fallbackWords.length - 1; i++) {
+      const blends = generatePortmanteau(fallbackWords[i]!, fallbackWords[i + 1]!);
       for (const blend of blends) {
         suggestions.add(blend);
       }
@@ -393,14 +438,14 @@ export function generateSmartSuggestions(
   }
 
   // 6. Word reordering
-  if (words.length >= 2) {
-    suggestions.add(words.slice().reverse().join(''));
+  if (fallbackWords.length >= 2) {
+    suggestions.add(fallbackWords.slice().reverse().join(''));
   }
 
   // 7. Abbreviation suggestions
-  if (words.length >= 2) {
+  if (fallbackWords.length >= 2) {
     // First letters
-    const initials = words.map(w => w[0]).join('');
+    const initials = fallbackWords.map(w => w[0]).join('');
     if (initials.length >= 2) {
       suggestions.add(initials + 'hub');
       suggestions.add(initials + 'app');

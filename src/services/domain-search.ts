@@ -152,8 +152,16 @@ async function applyAftermarketFallback(result: DomainResult): Promise<void> {
 
 function applyPricingMetadata(result: DomainResult): void {
   if (!result.price_check_url) {
-    result.price_check_url =
-      buildRegistrarPriceUrl(result.registrar, result.domain) || undefined;
+    if (
+      config.pricingApi.enabled &&
+      (!result.registrar || result.registrar === 'unknown')
+    ) {
+      result.price_check_url =
+        buildRegistrarPriceUrl('porkbun', result.domain) || undefined;
+    } else {
+      result.price_check_url =
+        buildRegistrarPriceUrl(result.registrar, result.domain) || undefined;
+    }
   }
 
   if (result.price_note) {

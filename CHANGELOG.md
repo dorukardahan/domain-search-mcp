@@ -9,6 +9,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 - -
 
+## [1.2.28] - 2025-12-30
+### Changed
+- Refined smart suggestion filtering for crypto/tech prompts to avoid fragment outputs.
+- Prefer Porkbun price check links when pricing backend is enabled and registrar is unknown.
+
 ## [1.2.27] - 2025-12-30
 ### Added
 - Nameserver-based aftermarket hints (Sedo/Dan/Afternic) with cache + timeout controls.
@@ -36,7 +41,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Changed
 - Removed Dynadot backend usage due to ToS restrictions.
 
-[Unreleased]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.27...HEAD
+[Unreleased]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.28...HEAD
+[1.2.28]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.27...v1.2.28
 [1.2.27]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.26...v1.2.27
 [1.2.26]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.25...v1.2.26
 [1.2.25]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.2.24...v1.2.25
