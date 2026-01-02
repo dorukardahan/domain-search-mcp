@@ -213,11 +213,16 @@ async function textBasedWhoisCheck(
       return true;
     }
 
-    // Check for registered indicators
+    // Check for registered indicators (both old and new who.is format)
     if (
       html.includes('Registrar:') ||
       html.includes('Creation Date:') ||
-      html.includes('Name Server:')
+      html.includes('Name Server:') ||
+      html.includes('is registered') ||
+      html.includes('"Registrar"') ||
+      html.includes('"registrar"') ||
+      html.includes('Registrar Information') ||
+      html.includes('Important Dates')
     ) {
       return false;
     }
