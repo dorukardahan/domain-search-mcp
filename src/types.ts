@@ -269,6 +269,15 @@ export interface Config {
     token?: string;
   };
 
+  // Qwen inference (optional AI-powered suggestions)
+  qwenInference?: {
+    endpoint?: string;
+    apiKey?: string;
+    enabled: boolean;
+    timeoutMs: number;
+    maxRetries: number;
+  };
+
   // Logging
   logLevel: 'debug' | 'info' | 'warn' | 'error';
 

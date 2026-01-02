@@ -62,6 +62,7 @@ export function loadConfig(): Config {
   const hasPorkbun = !!(env.PORKBUN_API_KEY && env.PORKBUN_API_SECRET);
   const hasNamecheap = !!(env.NAMECHEAP_API_KEY && env.NAMECHEAP_API_USER);
   const hasPricingApi = !!env.PRICING_API_BASE_URL;
+  const hasQwen = !!env.QWEN_INFERENCE_ENDPOINT;
 
   const config: Config = {
     porkbun: {
@@ -83,6 +84,13 @@ export function loadConfig(): Config {
       maxQuotesPerBulk: parseIntWithDefault(env.PRICING_API_MAX_QUOTES_BULK, 0),
       concurrency: parseIntWithDefault(env.PRICING_API_CONCURRENCY, 4),
       token: env.PRICING_API_TOKEN,
+    },
+    qwenInference: {
+      endpoint: env.QWEN_INFERENCE_ENDPOINT,
+      apiKey: env.QWEN_API_KEY,
+      enabled: hasQwen,
+      timeoutMs: parseIntWithDefault(env.QWEN_TIMEOUT_MS, 15000),
+      maxRetries: parseIntWithDefault(env.QWEN_MAX_RETRIES, 2),
     },
     logLevel: (env.LOG_LEVEL as Config['logLevel']) || 'info',
     cache: {
@@ -147,6 +155,7 @@ export function hasRegistrarApi(): boolean {
  */
 export function getAvailableSources(): string[] {
   const sources: string[] = [];
+  if (config.qwenInference?.enabled) sources.push('qwen_inference');
   if (config.pricingApi.enabled) sources.push('pricing_api');
   if (config.porkbun.enabled) sources.push('porkbun');
   if (config.namecheap.enabled) sources.push('namecheap');

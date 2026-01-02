@@ -21,6 +21,7 @@ import {
 import { godaddyPublicAdapter, type GodaddySuggestion } from '../registrars/index.js';
 import { logger } from '../utils/logger.js';
 import type { DomainResult } from '../types.js';
+import { getQwenClient } from '../services/qwen-inference.js';
 
 /**
  * Premium price thresholds by TLD (first year price in USD).
@@ -103,16 +104,17 @@ export const suggestDomainsSmartTool = {
   description: `AI-powered domain name suggestion engine.
 
 Generate creative, brandable domain names from keywords or business descriptions.
-Combines our semantic engine with GoDaddy's AI suggestions for maximum coverage.
+Combines multiple intelligent sources for maximum coverage and quality.
 
 Features:
-- Dual-source suggestions: Our semantic engine + GoDaddy AI
+- Multi-source suggestions: Qwen 2.5-7B (if configured) + Semantic engine + GoDaddy AI
 - Understands natural language queries ("coffee shop in seattle")
 - Auto-detects industry for contextual suggestions
 - Generates portmanteau/blended names (instagram = instant + telegram)
 - Applies modern naming patterns (ly, ify, io, hub, etc.)
 - Filters premium domains by default
 - Pre-verified availability via GoDaddy
+- Graceful fallback: Works without Qwen endpoint
 
 Examples:
 - suggest_domains_smart("ai customer service") → AI-themed suggestions
@@ -210,7 +212,7 @@ interface SmartSuggestion {
   privacy_included: boolean;
   score: number;
   category: 'standard' | 'premium' | 'auction' | 'unavailable';
-  source: 'semantic_engine' | 'godaddy_suggest' | 'both';
+  source: 'qwen_inference' | 'semantic_engine' | 'godaddy_suggest' | 'both';
 }
 
 /**
@@ -223,6 +225,7 @@ interface SuggestDomainsSmartResponse {
   tld: string;
   style: string;
   sources: {
+    qwen_inference: number;
     semantic_engine: number;
     godaddy_suggest: number;
     merged: number;
@@ -254,14 +257,44 @@ export async function executeSuggestDomainsSmart(
 
     // Track source statistics
     const sourceStats = {
+      qwen_inference: 0,
       semantic_engine: 0,
       godaddy_suggest: 0,
       merged: 0,
     };
 
     // ========================================
-    // STEP 1: Generate suggestions from BOTH sources in parallel
+    // STEP 1: Generate suggestions from ALL sources in parallel
     // ========================================
+
+    // Source 0: Qwen AI model (optional, if configured)
+    let qwenSuggestions: Array<{ name: string; tld: string; reason?: string }> = [];
+    const qwenClient = getQwenClient();
+    if (qwenClient) {
+      try {
+        const qwenResults = await qwenClient.suggest({
+          query: normalizedQuery,
+          style,
+          tld,
+          max_suggestions: max_suggestions * 2, // Ask for extra to account for unavailable
+          temperature: style === 'creative' ? 0.9 : 0.7,
+        });
+
+        if (qwenResults) {
+          qwenSuggestions = qwenResults;
+          sourceStats.qwen_inference = qwenResults.length;
+          logger.debug('Qwen suggestions received', {
+            count: qwenResults.length,
+            sample: qwenResults.slice(0, 3).map(s => s.name),
+          });
+        }
+      } catch (error) {
+        // Qwen failed - continue with semantic engine + GoDaddy
+        logger.warn('Qwen suggestions failed, using fallback sources', {
+          error: error instanceof Error ? error.message : 'unknown',
+        });
+      }
+    }
 
     // Source 1: Our semantic engine
     const semanticSuggestions = generateSmartSuggestions(normalizedQuery, {
@@ -297,13 +330,22 @@ export async function executeSuggestDomainsSmart(
     // ========================================
 
     // Track which domains came from which source
-    const domainSources = new Map<string, 'semantic_engine' | 'godaddy_suggest' | 'both'>();
+    const domainSources = new Map<string, 'qwen_inference' | 'semantic_engine' | 'godaddy_suggest' | 'both'>();
+
+    // Add Qwen suggestions first (highest priority)
+    for (const qs of qwenSuggestions) {
+      const fullDomain = `${qs.name}.${qs.tld}`.toLowerCase();
+      domainSources.set(fullDomain, 'qwen_inference');
+    }
 
     // Add semantic suggestions (need availability check)
     const styledSuggestions = applyStyleFilter(semanticSuggestions, style, normalizedQuery);
     for (const name of styledSuggestions) {
       const fullDomain = `${name}.${tld}`.toLowerCase();
-      domainSources.set(fullDomain, 'semantic_engine');
+      // Don't override Qwen suggestions
+      if (!domainSources.has(fullDomain)) {
+        domainSources.set(fullDomain, 'semantic_engine');
+      }
     }
 
     // Add GoDaddy suggestions (already have availability)
@@ -459,9 +501,12 @@ export async function executeSuggestDomainsSmart(
     const insights: string[] = [];
 
     // Source info
+    if (sourceStats.qwen_inference > 0) {
+      insights.push(`🤖 ${sourceStats.qwen_inference} AI suggestions from Qwen model`);
+    }
     insights.push(`🔍 Sources: Semantic Engine (${sourceStats.semantic_engine}) + GoDaddy AI (${sourceStats.godaddy_suggest})`);
     if (sourceStats.merged > 0) {
-      insights.push(`🔗 ${sourceStats.merged} suggestions found in both sources`);
+      insights.push(`🔗 ${sourceStats.merged} suggestions found in multiple sources`);
     }
 
     if (detectedIndustry) {

@@ -19,6 +19,7 @@
     "coverage": "jest --coverage",
     "lint": "eslint src/**/*.ts",
     "clean": "rm -rf dist",
+    "dataset:generate": "node scripts/generate-domain-dataset.js --count 100000 --out data/domain-dataset-100k.jsonl",
     "prepublishOnly": "npm run build",
     "release:canary": "npm publish --tag canary --provenance",
     "release:latest": "npm publish --tag latest --provenance",
