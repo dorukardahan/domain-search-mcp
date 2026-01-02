@@ -114,12 +114,24 @@ export async function checkWhois(
           url: `https://whoisjson.com/api/v1/whois`,
           params: { domain: fullDomain },
           parser: (data: Record<string, unknown>) => {
-            // If we get a result, domain is registered
-            if (data.domain_name || data.registrar) {
-              return false;
+            // If we get domain data, it's registered
+            if (data.domain_name || data.registrar || data.creation_date || data.name_servers) {
+              return false; // registered
             }
-            // If error or no data, domain might be available
-            return true;
+            // Check for explicit "not found" messages
+            const status = String(data.status || '').toLowerCase();
+            const message = String(data.message || '').toLowerCase();
+            if (
+              status.includes('not found') ||
+              status.includes('available') ||
+              message.includes('not found') ||
+              message.includes('no match')
+            ) {
+              return true; // available
+            }
+            // IMPORTANT: If unclear, assume NOT available (fail-safe)
+            // This prevents false positives
+            return false;
           },
         },
       ];
