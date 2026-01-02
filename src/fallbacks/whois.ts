@@ -33,7 +33,7 @@ const WHOIS_SERVERS: Record<string, string> = {
   sh: 'whois.nic.sh',
 };
 
-const WHOIS_TIMEOUT_MS = 1500;
+const WHOIS_TIMEOUT_MS = 5000;
 const WHOIS_GLOBAL_CONCURRENCY = 2;
 const WHOIS_HOST_CONCURRENCY = 1;
 const whoisGlobalLimiter = new ConcurrencyLimiter(WHOIS_GLOBAL_CONCURRENCY);
@@ -114,6 +114,11 @@ export async function checkWhois(
           url: `https://whoisjson.com/api/v1/whois`,
           params: { domain: fullDomain },
           parser: (data: Record<string, unknown>) => {
+            // Check for API errors first (e.g., missing API key)
+            // These should not be treated as valid responses
+            if (data.statusCode === 403 || data.statusCode === 401 || data.error) {
+              throw new Error('WHOIS API requires authentication');
+            }
             // If we get domain data, it's registered
             if (data.domain_name || data.registrar || data.creation_date || data.name_servers) {
               return false; // registered
@@ -208,7 +213,10 @@ async function textBasedWhoisCheck(
     if (
       html.includes('is available for registration') ||
       html.includes('No match for') ||
-      html.includes('not found')
+      html.includes('not found') ||
+      html.includes('No WHOIS data was found') ||
+      html.includes('domain doesn\'t exist') ||
+      html.includes('No data found')
     ) {
       return true;
     }

@@ -57,7 +57,7 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SERVER_NAME = 'domain-search-mcp';
-const SERVER_VERSION = '1.3.1';
+const SERVER_VERSION = '1.3.2';
 
 /**
  * All available tools.
