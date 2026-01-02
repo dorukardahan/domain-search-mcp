@@ -10,9 +10,11 @@
  * - bulk_search: Check many domains at once
  * - compare_registrars: Compare pricing across registrars
  * - suggest_domains: Generate available name variations
- * - suggest_domains_smart: AI-powered domain suggestions with semantic analysis
+ * - suggest_domains_smart: AI-powered domain suggestions with Qwen 2.5-7B
  * - tld_info: Get TLD information and recommendations
  * - check_socials: Check social handle availability
+ * - analyze_project: Extract context from projects for domain suggestions
+ * - hunt_domains: Find valuable domains for investment
  *
  * @see https://github.com/yourusername/domain-search-mcp
  */
@@ -44,6 +46,10 @@ import {
   executeTldInfo,
   checkSocialsTool,
   executeCheckSocials,
+  analyzeProjectTool,
+  executeAnalyzeProject,
+  huntDomainsTool,
+  executeHuntDomains,
 } from './tools/index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -64,6 +70,8 @@ const TOOLS: Tool[] = [
   suggestDomainsSmartTool as Tool,
   tldInfoTool as Tool,
   checkSocialsTool as Tool,
+  analyzeProjectTool as Tool,
+  huntDomainsTool as Tool,
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -200,6 +208,13 @@ async function executeToolCall(
         style: (args.style as 'brandable' | 'descriptive' | 'short' | 'creative') || 'brandable',
         max_suggestions: (args.max_suggestions as number) || 15,
         include_premium: (args.include_premium as boolean) || false,
+        project_context: args.project_context as {
+          name?: string;
+          description?: string;
+          keywords?: string[];
+          industry?: string;
+          repository_url?: string;
+        } | undefined,
       });
 
     case 'tld_info':
@@ -214,6 +229,29 @@ async function executeToolCall(
         platforms: args.platforms as
           | Array<'github' | 'twitter' | 'instagram' | 'linkedin' | 'tiktok'>
           | undefined,
+      });
+
+    case 'analyze_project':
+      return executeAnalyzeProject({
+        path: args.path as string,
+        include_source_files: (args.include_source_files as boolean) || false,
+        suggest_domains: args.suggest_domains !== false, // Default true
+        tld: (args.tld as string) || 'com',
+        max_suggestions: (args.max_suggestions as number) || 10,
+        style: (args.style as 'brandable' | 'descriptive' | 'short' | 'creative') || 'brandable',
+      });
+
+    case 'hunt_domains':
+      return executeHuntDomains({
+        keywords: args.keywords as string[] | undefined,
+        tlds: (args.tlds as string[]) || ['com', 'io', 'co'],
+        min_length: (args.min_length as number) || 3,
+        max_length: (args.max_length as number) || 12,
+        include_aftermarket: args.include_aftermarket !== false, // Default true
+        max_aftermarket_price: args.max_aftermarket_price as number | undefined,
+        patterns: (args.patterns as Array<'short' | 'dictionary' | 'numeric' | 'brandable' | 'acronym'>) || ['short', 'brandable'],
+        max_results: (args.max_results as number) || 20,
+        score_threshold: (args.score_threshold as number) || 40,
       });
 
     default:

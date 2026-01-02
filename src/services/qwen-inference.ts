@@ -14,6 +14,120 @@ import { logger } from '../utils/logger.js';
 import { TtlCache } from '../utils/cache.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// STYLE CONFIGURATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Style-specific prompting configurations for domain name generation.
+ * Each style guides the model to use different naming techniques.
+ */
+const STYLE_PROMPTS: Record<string, {
+  description: string;
+  techniques: string[];
+  examples: string[];
+  constraints: string[];
+}> = {
+  brandable: {
+    description: 'Create memorable invented words that sound like real brands',
+    techniques: [
+      'Portmanteau blending (Instagram = Instant + Telegram)',
+      'Modern suffixes: -ly, -ify, -io, -ai, -eo, -va, -ra',
+      'Phonetic spellings (Lyft, Fiverr, Tumblr)',
+      'Consonant clusters that are pronounceable (Spotify, Stripe)',
+      'Neologisms - completely new words that sound natural',
+      'Letter substitution (K for C, X for Ex, Z for S)',
+    ],
+    examples: [
+      'spotify - blend of "spot" + made-up suffix',
+      'calendly - "calendar" + trendy "-ly" suffix',
+      'shopify - "shop" + tech suffix "-ify"',
+      'zapier - invented word from "zap" concept',
+      'airtable - compound of "air" + "table"',
+      'notion - single real word reimagined',
+      'figma - invented word, short and punchy',
+      'vercel - invented, sounds like "versatile"',
+    ],
+    constraints: [
+      'MUST be pronounceable (say it out loud test)',
+      'Length: 4-10 characters ideal',
+      'NO generic descriptive names like "fastapp" or "quickdata"',
+      'AVOID real dictionary words unless reimagined',
+    ],
+  },
+  descriptive: {
+    description: 'Clear, professional names that convey meaning immediately',
+    techniques: [
+      'Compound words that describe the product',
+      'Professional suffixes: -hq, -hub, -base, -stack, -cloud',
+      'Action + object patterns (Dropbox, Mailchimp)',
+      'Industry term + qualifier (Salesforce, Workday)',
+    ],
+    examples: [
+      'dropbox - action + container',
+      'mailchimp - service + mascot',
+      'hubspot - central + location',
+      'zendesk - philosophy + workspace',
+      'basecamp - foundation + project term',
+    ],
+    constraints: [
+      'Should be understandable at first glance',
+      'Length: 5-12 characters',
+      'Must relate to the product/service',
+    ],
+  },
+  short: {
+    description: 'Ultra-short, punchy names (4-7 characters max)',
+    techniques: [
+      'Truncation (removing vowels or syllables)',
+      'Single syllable words',
+      'Acronym-like patterns',
+      'Sound-based (onomatopoeia)',
+      'Prefix/suffix removal',
+    ],
+    examples: [
+      'uber - short, powerful',
+      'lyft - phonetic spelling, short',
+      'snap - one syllable, action',
+      'zoom - one syllable, energy',
+      'trello - invented, compact',
+      'asana - borrowed word, elegant',
+      'jira - short, distinctive',
+    ],
+    constraints: [
+      'MAXIMUM 7 characters',
+      'MINIMUM 3 characters',
+      'Must be easy to type and remember',
+      'One or two syllables preferred',
+    ],
+  },
+  creative: {
+    description: 'Maximum experimentation - wordplay, unusual sounds, artistic names',
+    techniques: [
+      'Unusual letter combinations',
+      'Phonetic playfulness',
+      'Onomatopoeia (sounds like what it does)',
+      'Mythological or invented language references',
+      'Reversed words or misspellings',
+      'Sound symbolism (sharp sounds for speed, soft for comfort)',
+    ],
+    examples: [
+      'skype - sky + type blended',
+      'twitch - evocative action word',
+      'flickr - vowel removal style',
+      'tumblr - vowel removal style',
+      'hulu - completely invented, playful',
+      'etsy - invented, crafty feel',
+      'vimeo - anagram of "movie"',
+    ],
+    constraints: [
+      'Can break conventional rules',
+      'Must still be pronounceable',
+      'Should evoke emotion or imagery',
+    ],
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // TYPES & SCHEMAS
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -53,6 +167,28 @@ export const QwenResponseSchema = z.object({
 export type QwenResponse = z.infer<typeof QwenResponseSchema>;
 
 /**
+ * Project or idea context for more relevant domain suggestions.
+ */
+export interface QwenContext {
+  /** Project or business description */
+  description?: string;
+  /** Detected or specified industry */
+  industry?: string;
+  /** Keywords to blend or incorporate */
+  keywords?: string[];
+  /** Inspiration words for the brand */
+  brandWords?: string[];
+  /** Minimum domain name length */
+  minLength?: number;
+  /** Maximum domain name length */
+  maxLength?: number;
+  /** Project name (if analyzing a codebase) */
+  projectName?: string;
+  /** Repository URL (for context) */
+  repositoryUrl?: string;
+}
+
+/**
  * Options for Qwen suggestion request.
  */
 export interface QwenSuggestOptions {
@@ -61,6 +197,8 @@ export interface QwenSuggestOptions {
   tld?: string;
   max_suggestions?: number;
   temperature?: number;
+  /** Additional context for more relevant suggestions */
+  context?: QwenContext;
 }
 
 /**
@@ -119,10 +257,10 @@ export class QwenInferenceClient {
    * Graceful degradation - caller should fall back to other sources.
    */
   async suggest(options: QwenSuggestOptions): Promise<QwenDomain[] | null> {
-    const { query, style = 'brandable', tld = 'com', max_suggestions = 10, temperature = 0.7 } = options;
+    const { query, style = 'brandable', tld = 'com', max_suggestions = 10, temperature = 0.7, context } = options;
 
-    // Build prompt
-    const prompt = this._buildPrompt(query, style, tld, max_suggestions);
+    // Build enhanced prompt with context
+    const prompt = this._buildPrompt(query, style, tld, max_suggestions, context);
 
     // Check cache first
     const cacheKey = `${prompt}:${temperature}`;
@@ -179,30 +317,164 @@ export class QwenInferenceClient {
   }
 
   /**
-   * Build prompt for Qwen model based on style and context.
+   * Build comprehensive prompt for Qwen model based on style and context.
    *
-   * Uses the structured format the model was fine-tuned on.
+   * Uses structured blocks to guide the model toward generating
+   * truly inventive, brandable domain names.
    */
   private _buildPrompt(
     query: string,
     style: string,
     tld: string,
     maxSuggestions: number,
+    context?: QwenContext,
   ): string {
-    return `Query: ${query}
-Style: ${style}
-TLD: ${tld}
-Count: ${maxSuggestions}
+    const styleConfig = STYLE_PROMPTS[style] || STYLE_PROMPTS.brandable;
+
+    // Build the prompt in structured blocks
+    const blocks: string[] = [];
+
+    // System block - explains the task and techniques
+    blocks.push(this._buildSystemBlock(styleConfig));
+
+    // Context block - project/idea specific information
+    if (context) {
+      blocks.push(this._buildContextBlock(context));
+    }
+
+    // Task block - the actual request
+    blocks.push(this._buildTaskBlock(query, tld, maxSuggestions, context));
+
+    // Format block - specifies output format
+    blocks.push(this._buildFormatBlock(tld));
+
+    return blocks.join('\n\n');
+  }
+
+  /**
+   * Build the system instruction block explaining techniques and style.
+   */
+  private _buildSystemBlock(styleConfig: typeof STYLE_PROMPTS.brandable): string {
+    const lines: string[] = [
+      '=== DOMAIN NAME GENERATION ===',
+      '',
+      `Style: ${styleConfig?.description || 'Create memorable, brandable domain names'}`,
+      '',
+      'TECHNIQUES TO USE:',
+    ];
+
+    const techniques = styleConfig?.techniques || [];
+    for (const technique of techniques) {
+      lines.push(`• ${technique}`);
+    }
+
+    lines.push('', 'EXAMPLE NAMES (for inspiration, NOT to copy):');
+    const examples = styleConfig?.examples || [];
+    for (const example of examples.slice(0, 5)) {
+      lines.push(`• ${example}`);
+    }
+
+    lines.push('', 'CONSTRAINTS:');
+    const constraints = styleConfig?.constraints || [];
+    for (const constraint of constraints) {
+      lines.push(`• ${constraint}`);
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Build the context block from project/idea information.
+   */
+  private _buildContextBlock(context: QwenContext): string {
+    const lines: string[] = ['=== CONTEXT ==='];
+
+    if (context.projectName) {
+      lines.push(`Project Name: ${context.projectName}`);
+    }
+
+    if (context.description) {
+      lines.push(`Description: ${context.description}`);
+    }
+
+    if (context.industry) {
+      lines.push(`Industry: ${context.industry}`);
+    }
+
+    if (context.keywords && context.keywords.length > 0) {
+      lines.push(`Keywords to incorporate: ${context.keywords.join(', ')}`);
+    }
+
+    if (context.brandWords && context.brandWords.length > 0) {
+      lines.push(`Brand inspiration words: ${context.brandWords.join(', ')}`);
+    }
+
+    const minLen = context.minLength || 4;
+    const maxLen = context.maxLength || 12;
+    lines.push(`Length requirement: ${minLen}-${maxLen} characters`);
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Build the task block specifying what to generate.
+   */
+  private _buildTaskBlock(
+    query: string,
+    tld: string,
+    count: number,
+    context?: QwenContext,
+  ): string {
+    const lines: string[] = [
+      '=== TASK ===',
+      `Generate ${count} unique, INVENTED domain names for: "${query}"`,
+      `Target TLD: .${tld}`,
+      '',
+      'IMPORTANT RULES:',
+      '1. INVENT NEW WORDS - do not use common dictionary words directly',
+      '2. Each name must be UNIQUE and CREATIVE',
+      '3. Names must be PRONOUNCEABLE (read it aloud)',
+      '4. NO generic patterns like "fastX", "quickY", "proZ"',
+      '5. Think like a startup founder naming their company',
+    ];
+
+    // Add context-specific guidance
+    if (context?.keywords && context.keywords.length > 0) {
+      lines.push(`6. Try to BLEND or TRANSFORM these keywords: ${context.keywords.slice(0, 3).join(', ')}`);
+    }
+
+    if (context?.industry) {
+      lines.push(`7. Names should feel appropriate for the ${context.industry} industry`);
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Build the output format specification block.
+   */
+  private _buildFormatBlock(tld: string): string {
+    return `=== OUTPUT FORMAT ===
+Return EXACTLY in this format (one domain per line):
+- name.${tld} - Brief reason why this name works
+
+Example output:
+- voxify.${tld} - Blend of "voice" + "-ify", modern tech feel
+- zestora.${tld} - Invented word, energetic "zest" + melodic ending
 
 Domains:`;
   }
 
   /**
    * Calculate max_tokens based on number of suggestions.
+   *
+   * Each suggestion needs ~60 tokens (name + tld + detailed reason).
+   * We add a buffer for the model to think and format properly.
    */
   private _calculateMaxTokens(maxSuggestions: number): number {
-    // ~50 tokens per suggestion (name + tld + reason)
-    return Math.min(128 + maxSuggestions * 50, 1024);
+    // ~60 tokens per suggestion (name + tld + reason with explanation)
+    // Minimum 256 tokens to give the model room to work
+    return Math.min(256 + maxSuggestions * 60, 2048);
   }
 
   /**

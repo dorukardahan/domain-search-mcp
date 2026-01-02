@@ -50,3 +50,17 @@ export {
   executeCheckSocials,
   type CheckSocialsInput,
 } from './check_socials.js';
+
+export {
+  analyzeProjectTool,
+  analyzeProjectSchema,
+  executeAnalyzeProject,
+  type AnalyzeProjectInput,
+} from './analyze_project.js';
+
+export {
+  huntDomainsTool,
+  huntDomainsSchema,
+  executeHuntDomains,
+  type HuntDomainsInput,
+} from './hunt_domains.js';

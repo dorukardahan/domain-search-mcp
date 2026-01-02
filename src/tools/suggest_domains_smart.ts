@@ -21,7 +21,7 @@ import {
 import { godaddyPublicAdapter, type GodaddySuggestion } from '../registrars/index.js';
 import { logger } from '../utils/logger.js';
 import type { DomainResult } from '../types.js';
-import { getQwenClient } from '../services/qwen-inference.js';
+import { getQwenClient, type QwenContext } from '../services/qwen-inference.js';
 
 /**
  * Premium price thresholds by TLD (first year price in USD).
@@ -92,6 +92,19 @@ export const suggestDomainsSmartSchema = z.object({
     .optional()
     .default(false)
     .describe("Include premium-priced domains in results. Defaults to false."),
+  project_context: z
+    .object({
+      name: z.string().optional().describe("Project name"),
+      description: z.string().optional().describe("Project description"),
+      keywords: z.array(z.string()).optional().describe("Keywords to incorporate"),
+      industry: z.string().optional().describe("Industry context"),
+      repository_url: z.string().optional().describe("Repository URL if applicable"),
+    })
+    .optional()
+    .describe(
+      "Optional project context for more relevant suggestions. " +
+      "Use analyze_project tool to extract this automatically from a codebase."
+    ),
 });
 
 export type SuggestDomainsSmartInput = z.infer<typeof suggestDomainsSmartSchema>;
@@ -148,6 +161,17 @@ Examples:
       include_premium: {
         type: 'boolean',
         description: "Include premium domains. Defaults to false.",
+      },
+      project_context: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: "Project name" },
+          description: { type: 'string', description: "Project description" },
+          keywords: { type: 'array', items: { type: 'string' }, description: "Keywords" },
+          industry: { type: 'string', description: "Industry context" },
+          repository_url: { type: 'string', description: "Repository URL" },
+        },
+        description: "Project context from analyze_project for better suggestions.",
       },
     },
     required: ['query'],
@@ -247,13 +271,22 @@ export async function executeSuggestDomainsSmart(
   input: SuggestDomainsSmartInput,
 ): Promise<SuggestDomainsSmartResponse> {
   try {
-    const { query, tld, industry, style, max_suggestions, include_premium } =
+    const { query, tld, industry, style, max_suggestions, include_premium, project_context } =
       suggestDomainsSmartSchema.parse(input);
 
     // Normalize and analyze input
     const normalizedQuery = query.toLowerCase().trim();
     const detectedWords = segmentWords(normalizedQuery);
-    const detectedIndustry = industry || detectIndustry(detectedWords);
+    const detectedIndustry = industry || project_context?.industry || detectIndustry(detectedWords);
+
+    // Build Qwen context from project_context if provided
+    const qwenContext: QwenContext | undefined = project_context ? {
+      projectName: project_context.name,
+      description: project_context.description,
+      industry: project_context.industry || detectedIndustry || undefined,
+      keywords: project_context.keywords,
+      repositoryUrl: project_context.repository_url,
+    } : undefined;
 
     // Track source statistics
     const sourceStats = {
@@ -278,6 +311,7 @@ export async function executeSuggestDomainsSmart(
           tld,
           max_suggestions: max_suggestions * 2, // Ask for extra to account for unavailable
           temperature: style === 'creative' ? 0.9 : 0.7,
+          context: qwenContext, // Pass project context for better suggestions
         });
 
         if (qwenResults) {
