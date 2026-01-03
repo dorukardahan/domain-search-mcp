@@ -120,6 +120,9 @@ export function loadConfig(): Config {
   const hasPricingApi = !!pricingApiUrl;
   const hasQwen = !!qwenEndpoint;
 
+  // Together.ai cloud inference (primary provider)
+  const hasTogetherAi = !!env.TOGETHER_API_KEY;
+
   // SECURITY: Validate negative cache URL to prevent SSRF
   const negativeCacheUrl = validateExternalUrl(env.NEGATIVE_CACHE_URL);
   const hasNegativeCache = parseBool(env.NEGATIVE_CACHE_ENABLED, false) && !!negativeCacheUrl;
@@ -151,6 +154,13 @@ export function loadConfig(): Config {
       enabled: hasQwen,
       timeoutMs: parseIntWithDefault(env.QWEN_TIMEOUT_MS, 15000),
       maxRetries: parseIntWithDefault(env.QWEN_MAX_RETRIES, 2),
+    },
+    togetherAi: {
+      apiKey: env.TOGETHER_API_KEY,
+      enabled: hasTogetherAi,
+      timeoutMs: parseIntWithDefault(env.TOGETHER_TIMEOUT_MS, 30000),
+      maxRetries: parseIntWithDefault(env.TOGETHER_MAX_RETRIES, 2),
+      defaultModel: env.TOGETHER_DEFAULT_MODEL || 'qwen3-14b-instruct',
     },
     logLevel: (env.LOG_LEVEL as Config['logLevel']) || 'info',
     cache: {
@@ -226,11 +236,11 @@ export function hasRegistrarApi(): boolean {
 export function getAvailableSources(): string[] {
   const sources: string[] = [];
   if (config.negativeCache.enabled) sources.push('negative_cache');
-  if (config.qwenInference?.enabled) sources.push('qwen_inference');
+  if (config.togetherAi?.enabled) sources.push('together_ai'); // Primary AI provider
+  if (config.qwenInference?.enabled) sources.push('qwen_inference'); // Local fallback
   if (config.pricingApi.enabled) sources.push('pricing_api');
   if (config.porkbun.enabled) sources.push('porkbun');
   if (config.namecheap.enabled) sources.push('namecheap');
   sources.push('rdap', 'whois'); // Always available as fallbacks
-  sources.push('godaddy_signal'); // GoDaddy public endpoint for premium/auction signals
   return sources;
 }

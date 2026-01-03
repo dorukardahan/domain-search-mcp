@@ -1,127 +1,203 @@
-# Qwen Domain Model - Hızlı Başlangıç 🚀
+# Domain Name Model - CRFT Training 🚀
 
-5 adımda modelini eğit!
+5 adımda CRFT ile modelini eğit!
 
-## Adım 1: Vast.ai'da GPU Kirala
+## Neden CRFT?
 
-1. https://vast.ai/console/create/
-2. **RTX 4090** veya **A6000** seç (24GB VRAM)
-3. Docker image: `pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel`
-4. **RENT** → instance başlasın
+| Metrik | Standard LoRA | CRFT |
+|--------|---------------|------|
+| Eğitilen parametreler | ~1% | ~0.016% |
+| GPU bellek | Yüksek | Düşük |
+| Overfitting riski | Orta | Düşük |
+| Eğitim süresi | Uzun | Kısa |
+
+CRFT sadece "reasoning-critical" (orta) katmanları eğitir.
+
+---
+
+## Adım 1: RunPod'da GPU Kirala
+
+1. https://www.runpod.io/console/pods
+2. **+ Deploy** → GPU seç:
+   - **RTX 4090** (24GB) → $0.44/saat → Önerilen
+   - **A100 80GB** → $1.99/saat → Büyük modeller için
+3. Template: `runpod/pytorch:2.1.0-py3.10-cuda12.1.1-devel-ubuntu22.04`
+4. **Deploy**
 
 ## Adım 2: SSH ile Bağlan
 
 ```bash
-ssh -p PORT root@HOST.vast.ai
+# RunPod panelinden "Connect" → SSH komutunu kopyala
+ssh root@<POD_IP> -p <PORT> -i ~/.ssh/id_ed25519
 ```
 
-(PORT ve HOST bilgilerini vast.ai panelinden kopyala)
-
-## Adım 3: Kurulum Yap (Otomatik)
+## Adım 3: Kurulum (Otomatik)
 
 ```bash
-apt-get update && apt-get install -y git
 cd /workspace
 git clone https://github.com/dorukardahan/domain-search-mcp.git
 cd domain-search-mcp
-bash training/setup_vast.sh
+bash training/setup_runpod.sh
 ```
 
-## Adım 4: Eğitimi Başlat
-
-### Hızlı Test (10 dakika, $0.10)
-
-```bash
-python training/qlora_train.py \
-  --model Qwen/Qwen2.5-7B-Instruct \
-  --data data/domain-dataset-100k.jsonl \
-  --output training/output-test \
-  --batch_size 4 \
-  --grad_accum 8 \
-  --max_samples 1000
-```
-
-### Full Eğitim (6-8 saat, $3-5)
-
-```bash
-python training/qlora_train.py \
-  --model Qwen/Qwen2.5-7B-Instruct \
-  --data data/domain-dataset-100k.jsonl \
-  --output training/output \
-  --batch_size 8 \
-  --grad_accum 4 \
-  --epochs 1
-```
-
-## Adım 5: Modeli İndir (Eğitim Bitince)
+## Adım 4: Dataset'i Yükle
 
 Local terminalinde:
 
 ```bash
-scp -P PORT -r root@HOST.vast.ai:/workspace/domain-search-mcp/training/output ./qwen-domain-lora
+cd domain-search-mcp
+scp -P <PORT> training/data/train.jsonl root@<POD_IP>:/workspace/domain-search-mcp/training/data/
+scp -P <PORT> training/data/val.jsonl root@<POD_IP>:/workspace/domain-search-mcp/training/data/
 ```
 
-## ✅ Bitti!
+## Adım 5: Eğitimi Başlat
 
-Modelin hazır. Şimdi test et:
+### Hızlı Test (5 dakika, ~$0.50)
 
 ```bash
-# Vast.ai'da (eğitim bittikten sonra)
+python training/train_crft.py \
+  --model Qwen/Qwen2.5-7B-Instruct \
+  --data training/data/train.jsonl \
+  --val_data training/data/val.jsonl \
+  --output training/output-test \
+  --max_samples 500 \
+  --epochs 1
+```
+
+### Full Training (4-6 saat, ~$30-50)
+
+```bash
+python training/train_crft.py \
+  --model Qwen/Qwen2.5-14B-Instruct \
+  --data training/data/train.jsonl \
+  --val_data training/data/val.jsonl \
+  --output training/output \
+  --epochs 1 \
+  --batch_size 4 \
+  --grad_accum 8
+```
+
+### WandB ile İzleme (Opsiyonel)
+
+```bash
+wandb login  # API key gir
+python training/train_crft.py \
+  ... \
+  --wandb_project domain-crft
+```
+
+---
+
+## Eğitim Bittikten Sonra
+
+### 1. Test Et
+
+```bash
 python training/test_model.py \
   --model_path training/output \
   --prompt "Generate 5 brandable names for a crypto wallet app"
 ```
 
----
+### 2. Modeli İndir
 
-## 🆘 Sorun mu var?
+Local terminalinde:
 
-### "CUDA out of memory"
-→ Batch size'ı küçült: `--batch_size 2 --grad_accum 16`
-
-### "Dataset not found"
-→ Dataset'i upload et:
 ```bash
-# Local terminalinde
-cd domain-search-mcp
-scp -P PORT data/domain-dataset-100k.jsonl root@HOST.vast.ai:/workspace/domain-search-mcp/data/
+scp -P <PORT> -r root@<POD_IP>:/workspace/domain-search-mcp/training/output ./qwen-domain-crft
 ```
 
-### "Model download failed"
-→ HuggingFace login yap:
+### 3. Evaluate Et
+
 ```bash
-pip install -U huggingface_hub
+# RunPod'da veya local'de
+python training/run_evaluation.py --dataset test --sample 100
+```
+
+---
+
+## 💰 Maliyet Tahmini
+
+| GPU | Saatlik | 5 saat (Full) |
+|-----|---------|---------------|
+| RTX 4090 | $0.44 | ~$2.20 |
+| A6000 | $0.79 | ~$4.00 |
+| A100 40GB | $1.49 | ~$7.50 |
+| A100 80GB | $1.99 | ~$10.00 |
+
+**İpucu**: RTX 4090 ile 14B model eğitebilirsin (4-bit quantization sayesinde).
+
+---
+
+## 🆘 Sorun Giderme
+
+### "CUDA out of memory"
+
+```bash
+# Batch size'ı düşür, gradient accumulation'ı artır
+--batch_size 2 --grad_accum 16
+```
+
+### "Model not found"
+
+```bash
+# HuggingFace login
 huggingface-cli login
 # Token: https://huggingface.co/settings/tokens
 ```
 
----
+### Eğitim çok yavaş
 
-## 💰 Maliyet
-
-| Test (1000 örnek) | Full (100k örnek) |
-|-------------------|-------------------|
-| ~10 dakika        | ~6-8 saat         |
-| ~$0.10            | ~$3-5             |
-
-**İpucu**: İlk denemede mutlaka test yap!
+```bash
+# Daha güçlü GPU al veya sample sayısını azalt
+--max_samples 20000
+```
 
 ---
 
-## 📚 Detaylı Dokümantasyon
+## 📊 Baseline Skorlar (Training Öncesi)
 
-- **Full setup guide**: `training/VAST_AI_SETUP.md`
-- **Training README**: `training/README.md`
-- **Troubleshooting**: `training/VAST_AI_SETUP.md#troubleshooting`
+```
+Constraint Satisfaction: 100%
+Diversity:               76.4%
+Pronounceability:        88.3%
+Brandability:            73.4%
+---
+COMBINED SCORE:          8.57/10
+```
+
+**Hedef**: Training sonrası 9.0+ / 10
 
 ---
 
 ## 🎯 Sonraki Adımlar
 
-1. ✅ Model eğitildi
-2. 🧪 Test et: `python training/test_model.py`
-3. 📥 İndir: `scp` ile local'e al
-4. 🚀 MCP'ye entegre et
-5. 🎉 Production'a taşı (Replicate, HF Inference, vs.)
+1. ✅ CRFT Training tamamlandı
+2. 🧪 Test ve evaluate et
+3. 📤 Together.ai'ya yükle (inference için)
+4. 🚀 MCP server'a entegre et
+
+---
+
+## Dosya Yapısı
+
+```
+training/
+├── train_crft.py        # CRFT training scripti
+├── test_model.py        # Model test scripti
+├── run_evaluation.py    # Eval framework
+├── setup_runpod.sh      # RunPod kurulum
+├── requirements.txt     # Python dependencies
+├── data/
+│   ├── train.jsonl      # 80k samples
+│   ├── val.jsonl        # 10k samples
+│   └── test.jsonl       # 10k samples
+├── eval/
+│   ├── constraint_satisfaction.py
+│   ├── diversity_metrics.py
+│   ├── pronounceability.py
+│   └── premium_score.py
+└── results/
+    └── baseline_dataset_quality.json
+```
 
 **Başarılar! 🚀**

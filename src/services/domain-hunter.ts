@@ -605,7 +605,6 @@ export async function huntDomains(criteria: HuntCriteria): Promise<HuntDomainsRe
           try {
             const response = await searchDomain(name, [tld], undefined, {
               pricing: { enabled: false, maxQuotes: 0 },
-              includeGodaddySignals: false,
             });
 
             const result = response.results.find(r => r.domain === `${name}.${tld}`);

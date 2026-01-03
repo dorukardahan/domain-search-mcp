@@ -1,0 +1,8 @@
+{
+  "train_loss": 1.5863172729492188,
+  "train_runtime": 9275.5797,
+  "train_samples_per_second": 8.625,
+  "trainable_params": 1720320,
+  "total_params": 4354692608,
+  "trainable_percent": 0.03950496980750381
+}

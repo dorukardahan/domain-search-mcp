@@ -1,0 +1,17 @@
+{
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "data": "data/train.jsonl",
+  "output": "output-full",
+  "val_data": "data/val.jsonl",
+  "max_seq_len": 512,
+  "batch_size": 4,
+  "grad_accum": 8,
+  "epochs": 1,
+  "lr": 1e-05,
+  "max_samples": -1,
+  "lora_r": 8,
+  "lora_alpha": 16,
+  "save_steps": 500,
+  "eval_steps": 500,
+  "wandb_project": null
+}

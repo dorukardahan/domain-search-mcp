@@ -181,7 +181,7 @@ export function buildDomain(name: string, tld: string): string {
  */
 export function validateRegistrar(registrar: string): string {
   const normalized = registrar.trim().toLowerCase();
-  const validRegistrars = ['porkbun', 'namecheap', 'godaddy'];
+  const validRegistrars = ['porkbun', 'namecheap'];
 
   if (!validRegistrars.includes(normalized)) {
     throw new Error(

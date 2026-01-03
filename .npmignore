@@ -1,37 +1,47 @@
-# Dependencies
-node_modules/
+# Development and test files
+tests/
+*.test.ts
+*.spec.ts
+jest.config.js
+tsconfig.json
 
-# Build artifacts (keep dist/ in package)
-*.tsbuildinfo
+# Source TypeScript (publish compiled JS only)
+src/
 
-# Environment files (contain secrets!)
+# Large data files
+data/
+training/
+cache-backend/
+
+# Environment and config
 .env
 .env.local
-.env.*.local
-.mcpregistry_*
+.env.example
 
-# IDE
+# GitHub specific
+.github/
+
+# Development docs
+AGENTS.md
+CLAUDE.md
+SECURITY.md
+context7.json
+
+# Docker
+Dockerfile
+
+# Scripts
+scripts/
+tunnel-qwen.sh
+
+# Editor/IDE
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Test coverage
-coverage/
-.nyc_output/
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Temporary files
-tmp/
-temp/
-*.tmp
+# npm
+*.tgz
+.npmrc

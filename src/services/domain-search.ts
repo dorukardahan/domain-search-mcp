@@ -2,17 +2,19 @@
  * Domain Search Service.
  *
  * Orchestrates domain availability checks across multiple sources:
- * 1. Porkbun (if configured - has pricing)
+ * 1. Porkbun (if configured - has pricing, most reliable)
  * 2. Namecheap (if configured - has pricing)
- * 3. RDAP (primary public source)
- * 4. WHOIS (last resort)
- * 5. GoDaddy public endpoint (premium/auction signal only for search_domain)
+ * 3. RDAP (free public source, no pricing)
+ * 4. WHOIS (last resort fallback)
  *
  * Handles:
  * - Smart source selection based on availability and configuration
  * - Graceful fallback on failures
  * - Caching for performance
  * - Insights generation for vibecoding UX
+ *
+ * Note: Porkbun API is the primary source when configured as it provides
+ * accurate availability AND pricing in a single call.
  */
 
 import type { DomainResult, SearchResponse } from '../types.js';
@@ -33,8 +35,6 @@ import { ConcurrencyLimiter } from '../utils/concurrency.js';
 import {
   porkbunAdapter,
   namecheapAdapter,
-  godaddyPublicAdapter,
-  type ParsedAvailability,
 } from '../registrars/index.js';
 import { checkRdap, isRdapAvailable } from '../fallbacks/rdap.js';
 import { checkWhois, isWhoisAvailable } from '../fallbacks/whois.js';
@@ -74,7 +74,6 @@ type PricingBudget = {
 
 type SearchOptions = {
   pricing?: PricingOptions;
-  includeGodaddySignals?: boolean;
 };
 
 
@@ -205,6 +204,7 @@ function applyPricingMetadata(result: DomainResult): void {
 
 /**
  * Search for domain availability across multiple TLDs.
+ * Uses Porkbun as primary source when configured, with RDAP/WHOIS fallback.
  */
 export async function searchDomain(
   domainName: string,
@@ -215,7 +215,6 @@ export async function searchDomain(
   const startTime = Date.now();
   const normalizedDomain = validateDomainName(domainName);
   const normalizedTlds = validateTlds(tlds);
-  const includeGodaddySignals = options?.includeGodaddySignals ?? true;
   const pricingBudget = createPricingBudget(options?.pricing);
 
   logger.info('Domain search started', {
@@ -228,36 +227,16 @@ export async function searchDomain(
   const errors: string[] = [];
   let fromCache = false;
 
-  // OPTIMIZATION: Run GoDaddy signals and main TLD searches in PARALLEL
-  // GoDaddy signal lookup should not block the main search
-  const fullDomains = normalizedTlds.map((tld) =>
-    buildDomain(normalizedDomain, tld),
-  );
-
-  // Start GoDaddy lookup (non-blocking)
-  const godaddyPromise = includeGodaddySignals
-    ? godaddyPublicAdapter.bulkSearch(fullDomains).catch((error) => {
-        logger.debug('GoDaddy signal lookup failed', {
-          domain: normalizedDomain,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return null;
-      })
-    : Promise.resolve(null);
-
-  // Run TLD checks with concurrency limits (parallel with GoDaddy)
+  // Run TLD checks with concurrency limits
   const limiter = new ConcurrencyLimiter(SEARCH_TLD_CONCURRENCY);
-  const tldSearchPromise = Promise.all(
+  const outcomes = await Promise.all(
     normalizedTlds.map((tld) =>
       limiter.run(async () => {
         try {
-          // Note: godaddySignals will be null during initial search
-          // We merge signals after both complete
           const result = await searchSingleDomain(
             normalizedDomain,
             tld,
             preferredRegistrars,
-            null, // GoDaddy signals applied post-hoc
             pricingBudget,
           );
           if (result.fromCache) fromCache = true;
@@ -270,21 +249,8 @@ export async function searchDomain(
     ),
   );
 
-  // Wait for both to complete in parallel
-  const [godaddySignals, outcomes] = await Promise.all([
-    godaddyPromise,
-    tldSearchPromise,
-  ]);
-
   for (const outcome of outcomes) {
     if (outcome.success) {
-      // Apply GoDaddy signals post-hoc (from parallel lookup)
-      if (godaddySignals) {
-        const signal = godaddySignals.get(outcome.result.domain.toLowerCase());
-        if (signal) {
-          applyGodaddySignal(outcome.result, signal);
-        }
-      }
       results.push(outcome.result);
     } else {
       errors.push(`${outcome.tld}: ${outcome.error.userMessage}`);
@@ -319,12 +285,12 @@ export async function searchDomain(
 
 /**
  * Search a single domain with fallback chain.
+ * Priority: Porkbun (with pricing) → Namecheap → RDAP → WHOIS
  */
 async function searchSingleDomain(
   domain: string,
   tld: string,
   preferredRegistrars?: string[],
-  godaddySignals?: Map<string, ParsedAvailability> | null,
   pricingBudget?: PricingBudget,
 ): Promise<{ result: DomainResult; fromCache: boolean }> {
   const fullDomain = buildDomain(domain, tld);
@@ -334,7 +300,6 @@ async function searchSingleDomain(
   for (const source of [
     'porkbun_api',
     'namecheap_api',
-    'godaddy_api',
     'rdap',
     'whois',
   ] as const) {
@@ -348,7 +313,6 @@ async function searchSingleDomain(
 
   // Build source priority
   const sources = buildSourcePriority(tld, preferredRegistrars);
-  const godaddySignal = godaddySignals?.get(fullDomain.toLowerCase());
 
   // Try each source
   for (const source of sources) {
@@ -357,7 +321,6 @@ async function searchSingleDomain(
     try {
       const result = await trySource(domain, tld, source);
       if (result) {
-        applyGodaddySignal(result, godaddySignal);
         await applyPricingQuote(result, pricingBudget);
         // Calculate quality score
         result.score = calculateDomainScore(result);
@@ -401,46 +364,6 @@ async function searchSingleDomain(
         continue;
       }
     }
-  }
-
-  if (godaddySignal) {
-    const fallbackResult: DomainResult = {
-      domain: fullDomain,
-      available: godaddySignal.available,
-      premium: godaddySignal.premium,
-      price_first_year: null,
-      price_renewal: null,
-      currency: 'USD',
-      privacy_included: false,
-      transfer_price: null,
-      registrar: 'godaddy',
-      source: 'godaddy_api',
-      checked_at: new Date().toISOString(),
-      premium_reason: godaddySignal.premium
-        ? 'Premium domain (GoDaddy)'
-        : godaddySignal.auction
-        ? 'Auction domain (GoDaddy)'
-        : undefined,
-    };
-
-    if (godaddySignal.premium || godaddySignal.auction) {
-      fallbackResult.aftermarket = {
-        type: godaddySignal.auction ? 'auction' : 'premium',
-        price: null,
-        currency: null,
-        source: 'godaddy_signal',
-        url: buildAftermarketUrl(fallbackResult.domain),
-        note: 'Aftermarket/auction detected. Verify price at the marketplace link.',
-      };
-    }
-
-    applyPricingMetadata(fallbackResult);
-    await applyAftermarketFallback(fallbackResult);
-
-    const cacheKey = domainCacheKey(fullDomain, fallbackResult.source);
-    const ttlMs = fallbackResult.available ? CACHE_TTL_AVAILABLE_MS : CACHE_TTL_TAKEN_MS;
-    domainCache.set(cacheKey, fallbackResult, ttlMs);
-    return { result: fallbackResult, fromCache: false };
   }
 
   // All sources failed
@@ -501,9 +424,6 @@ async function trySource(
     case 'namecheap':
       return namecheapAdapter.search(domain, tld);
 
-    case 'godaddy':
-      return godaddyPublicAdapter.search(domain, tld);
-
     case 'rdap':
       return checkRdap(domain, tld);
 
@@ -513,50 +433,6 @@ async function trySource(
     default:
       logger.warn(`Unknown source: ${source}`);
       return null;
-  }
-}
-
-function applyGodaddySignal(
-  result: DomainResult,
-  signal?: ParsedAvailability | null,
-): void {
-  if (!signal) {
-    return;
-  }
-
-  if (result.source !== 'rdap' && result.source !== 'whois') {
-    return;
-  }
-
-  // CRITICAL FIX: GoDaddy's availability signal is more reliable than RDAP
-  // RDAP can return 404 (interpreted as "available") for:
-  // - Reserved domains
-  // - Premium domains held by registry
-  // - Rate-limited requests
-  // - Domains the RDAP server doesn't track
-  // When GoDaddy says "unavailable", trust it over RDAP's "available"
-  if (!signal.available && result.available) {
-    logger.debug('GoDaddy corrected RDAP false positive', {
-      domain: result.domain,
-      rdap_said: 'available',
-      godaddy_says: 'unavailable',
-    });
-    result.available = false;
-  }
-
-  if (signal.premium || signal.auction) {
-    if (signal.premium) {
-      result.premium = true;
-      result.premium_reason = result.premium_reason || 'Premium domain (GoDaddy)';
-    }
-    result.aftermarket = {
-      type: signal.auction ? 'auction' : 'premium',
-      price: null,
-      currency: null,
-      source: 'godaddy_signal',
-      url: buildAftermarketUrl(result.domain),
-      note: 'Aftermarket/auction detected. Verify price at the marketplace link.',
-    };
   }
 }
 
@@ -619,6 +495,26 @@ function mergePricing(
     payload.quote_status === 'catalog_only' ? 'catalog' : 'pricing_api';
 
   const quotes = payload.quotes || [];
+
+  // CRITICAL: Check if backend (Porkbun) says domain is actually NOT available.
+  // This corrects RDAP false positives where RDAP says available but Porkbun says taken.
+  const backendSaysNotAvailable = quotes.some((q) => q.available === false);
+  if (backendSaysNotAvailable) {
+    logger.debug('Backend corrected RDAP false positive', {
+      domain: result.domain,
+      rdap_said: result.available,
+      backend_says: false,
+    });
+    result.available = false;
+    result.source = 'pricing_api'; // Backend provided the authoritative answer
+    result.price_first_year = null;
+    result.price_renewal = null;
+    result.transfer_price = null;
+    result.pricing_status = 'not_available';
+    applyPricingMetadata(result);
+    return;
+  }
+
   const bestFirst = payload.best_first_year;
   const selected = pickBestQuote(quotes, bestFirst);
 
@@ -951,7 +847,6 @@ export async function bulkSearchDomains(
           normalizedDomain,
           tld,
           registrar ? [registrar] : undefined,
-          null,
           pricingBudget,
         );
         return result;

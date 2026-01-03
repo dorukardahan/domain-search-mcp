@@ -1,0 +1,45 @@
+{
+  "name": "test",
+  "num_samples": 10000,
+  "timestamp": "2026-01-03T12:10:05.390246",
+  "constraints": {
+    "num_samples": 10000,
+    "avg_length_satisfied": 1.0,
+    "avg_tld_satisfied": 1.0,
+    "avg_prefix_suffix_satisfied": 1.0,
+    "avg_count_satisfied": 1.0,
+    "avg_overall": 1.0
+  },
+  "diversity": {
+    "num_samples": 10000,
+    "avg_type_token_ratio": 0.802,
+    "avg_duplicate_rate": 0.008,
+    "avg_char_diversity": 0.53,
+    "avg_prefix_diversity": 0.705,
+    "avg_suffix_diversity": 0.792,
+    "avg_overall": 0.764
+  },
+  "cross_batch_diversity": {
+    "total_names": 90094,
+    "unique_names": 44296,
+    "unique_ratio": 0.492
+  },
+  "pronounceability": {
+    "num_samples": 10000,
+    "avg_vowel_ratio": 0.895,
+    "avg_consonant_cluster_score": 0.783,
+    "avg_pattern_score": 0.951,
+    "avg_length_score": 0.987,
+    "avg_overall": 0.883
+  },
+  "premium": {
+    "num_samples": 10000,
+    "avg_length_score": 0.69,
+    "avg_word_score": 0.704,
+    "avg_tld_score": 0.475,
+    "avg_pattern_score": 0.992,
+    "avg_memorability_score": 0.885,
+    "avg_overall": 0.734
+  },
+  "combined_score": 0.857
+}

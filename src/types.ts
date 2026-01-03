@@ -95,7 +95,6 @@ export interface DomainResult {
 export type DataSource =
   | 'porkbun_api'
   | 'namecheap_api'
-  | 'godaddy_api'
   | 'rdap'
   | 'whois'
   | 'pricing_api'
@@ -269,13 +268,23 @@ export interface Config {
     token?: string;
   };
 
-  // Qwen inference (optional AI-powered suggestions)
+  // Qwen inference (optional local AI-powered suggestions via llama.cpp)
   qwenInference?: {
     endpoint?: string;
     apiKey?: string;
     enabled: boolean;
     timeoutMs: number;
     maxRetries: number;
+  };
+
+  // Together.ai inference (primary cloud AI provider - $50/mo budget)
+  togetherAi?: {
+    apiKey?: string;
+    enabled: boolean;
+    timeoutMs: number;
+    maxRetries: number;
+    /** Default model (e.g., 'qwen3-14b-instruct', 'qwen2.5-72b') */
+    defaultModel?: string;
   };
 
   // Logging
