@@ -1,0 +1,33 @@
+{
+  "name": "domain-cache-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Federated negative cache backend for domain-search-mcp",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "db:migrate": "node -e \"require('fs').readFileSync('./schema.sql','utf8').split(';').filter(s=>s.trim()).forEach(s=>console.log(s))\"",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/rate-limit": "^10.0.0",
+    "pg": "^8.13.0",
+    "ioredis": "^5.4.0",
+    "dotenv": "^16.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
