@@ -67,27 +67,134 @@ const AVAILABLE_PATTERNS = [
 ];
 
 /**
- * Parse WHOIS response to determine availability.
+ * Patterns to extract expiration date from WHOIS response.
+ * Multiple formats used by different registrars.
  */
-function parseWhoisResponse(response: string): boolean {
+const EXPIRY_PATTERNS = [
+  /Registry Expiry Date:\s*(.+)/i,
+  /Registrar Registration Expiration Date:\s*(.+)/i,
+  /Expir(?:y|ation|es)[^:]*Date:\s*(.+)/i,
+  /paid-till:\s*(.+)/i,
+  /Renewal Date:\s*(.+)/i,
+  /Expiration Date:\s*(.+)/i,
+  /Expires:\s*(.+)/i,
+  /Expires On:\s*(.+)/i,
+  /Valid Until:\s*(.+)/i,
+];
+
+/**
+ * Patterns to extract registration/creation date from WHOIS response.
+ */
+const CREATION_PATTERNS = [
+  /Creation Date:\s*(.+)/i,
+  /Created Date:\s*(.+)/i,
+  /Created On:\s*(.+)/i,
+  /Created:\s*(.+)/i,
+  /Registration Date:\s*(.+)/i,
+  /Registered:\s*(.+)/i,
+  /Domain Registration Date:\s*(.+)/i,
+];
+
+/**
+ * Parse a date string to ISO 8601 format.
+ * Handles various formats from different registrars.
+ */
+function parseWhoisDate(dateStr: string): string | undefined {
+  if (!dateStr) return undefined;
+
+  // Clean up the string
+  const cleaned = dateStr.trim().replace(/\s+/g, ' ');
+
+  // Try parsing with Date constructor (handles ISO 8601 and many common formats)
+  const date = new Date(cleaned);
+  if (!isNaN(date.getTime())) {
+    return date.toISOString();
+  }
+
+  // Try parsing DD.MM.YYYY format (common in European registrars)
+  const euMatch = cleaned.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  if (euMatch) {
+    const [, day, month, year] = euMatch;
+    const parsed = new Date(`${year}-${month}-${day}`);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+
+  // Try parsing YYYY.MM.DD format
+  const dotMatch = cleaned.match(/(\d{4})\.(\d{2})\.(\d{2})/);
+  if (dotMatch) {
+    const [, year, month, day] = dotMatch;
+    const parsed = new Date(`${year}-${month}-${day}`);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Parse result containing availability and optional dates.
+ */
+interface WhoisParseResult {
+  available: boolean;
+  expires_at?: string;
+  registered_at?: string;
+}
+
+/**
+ * Parse WHOIS response to determine availability and extract dates.
+ */
+function parseWhoisResponse(response: string): WhoisParseResult {
   const text = response.toLowerCase();
 
   // Check for "available" patterns first
   for (const pattern of AVAILABLE_PATTERNS) {
     if (pattern.test(text)) {
-      return true;
+      return { available: true };
     }
   }
 
   // Check for "registered" patterns
+  let isRegistered = false;
   for (const pattern of REGISTERED_PATTERNS) {
     if (pattern.test(text)) {
-      return false;
+      isRegistered = true;
+      break;
+    }
+  }
+
+  // If registered, try to extract dates
+  let expires_at: string | undefined;
+  let registered_at: string | undefined;
+
+  if (isRegistered) {
+    // Extract expiry date
+    for (const pattern of EXPIRY_PATTERNS) {
+      const match = response.match(pattern);
+      if (match && match[1]) {
+        expires_at = parseWhoisDate(match[1]);
+        if (expires_at) break;
+      }
+    }
+
+    // Extract creation date
+    for (const pattern of CREATION_PATTERNS) {
+      const match = response.match(pattern);
+      if (match && match[1]) {
+        registered_at = parseWhoisDate(match[1]);
+        if (registered_at) break;
+      }
     }
   }
 
   // If no clear indication, assume not available (safer)
-  return false;
+  return {
+    available: !isRegistered && false, // Default to not available
+    expires_at,
+    registered_at,
+  };
 }
 
 /**
@@ -155,15 +262,16 @@ export async function checkWhois(
 
           if (response.status === 200 && response.data) {
             // Try to parse the response
-            let available: boolean;
+            let parseResult: WhoisParseResult;
 
             if (typeof response.data === 'string') {
-              available = parseWhoisResponse(response.data);
+              parseResult = parseWhoisResponse(response.data);
             } else {
-              available = api.parser(response.data as Record<string, unknown>);
+              const available = api.parser(response.data as Record<string, unknown>);
+              parseResult = { available };
             }
 
-            return createWhoisResult(domain, tld, available);
+            return createWhoisResult(domain, tld, parseResult);
           }
         } catch (error) {
           logger.debug('WHOIS API failed, trying next', {
@@ -175,8 +283,8 @@ export async function checkWhois(
 
       // If all APIs fail, try a simple text-based WHOIS lookup
       try {
-        const available = await textBasedWhoisCheck(fullDomain, tld);
-        return createWhoisResult(domain, tld, available);
+        const parseResult = await textBasedWhoisCheck(fullDomain, tld);
+        return createWhoisResult(domain, tld, parseResult);
       } catch (error) {
         if (error instanceof Error && error.message.includes('timeout')) {
           throw new TimeoutError('WHOIS lookup', WHOIS_TIMEOUT_MS);
@@ -197,7 +305,7 @@ export async function checkWhois(
 async function textBasedWhoisCheck(
   fullDomain: string,
   tld: string,
-): Promise<boolean> {
+): Promise<WhoisParseResult> {
   // Try who.is web service
   try {
     const response = await axios.get(`https://who.is/whois/${fullDomain}`, {
@@ -218,11 +326,11 @@ async function textBasedWhoisCheck(
       html.includes('domain doesn\'t exist') ||
       html.includes('No data found')
     ) {
-      return true;
+      return { available: true };
     }
 
     // Check for registered indicators (both old and new who.is format)
-    if (
+    const isRegistered =
       html.includes('Registrar:') ||
       html.includes('Creation Date:') ||
       html.includes('Name Server:') ||
@@ -230,13 +338,36 @@ async function textBasedWhoisCheck(
       html.includes('"Registrar"') ||
       html.includes('"registrar"') ||
       html.includes('Registrar Information') ||
-      html.includes('Important Dates')
-    ) {
-      return false;
+      html.includes('Important Dates');
+
+    if (isRegistered) {
+      // Try to extract dates from HTML content
+      let expires_at: string | undefined;
+      let registered_at: string | undefined;
+
+      // Extract expiry date from who.is HTML
+      for (const pattern of EXPIRY_PATTERNS) {
+        const match = html.match(pattern);
+        if (match && match[1]) {
+          expires_at = parseWhoisDate(match[1]);
+          if (expires_at) break;
+        }
+      }
+
+      // Extract creation date from who.is HTML
+      for (const pattern of CREATION_PATTERNS) {
+        const match = html.match(pattern);
+        if (match && match[1]) {
+          registered_at = parseWhoisDate(match[1]);
+          if (registered_at) break;
+        }
+      }
+
+      return { available: false, expires_at, registered_at };
     }
 
     // Default to not available
-    return false;
+    return { available: false };
   } catch (error) {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
@@ -256,8 +387,19 @@ async function textBasedWhoisCheck(
 function createWhoisResult(
   domain: string,
   tld: string,
-  available: boolean,
+  parseResult: WhoisParseResult,
 ): DomainResult {
+  const { available, expires_at, registered_at } = parseResult;
+
+  // Calculate days until expiration if we have an expiry date
+  let days_until_expiration: number | undefined;
+  if (expires_at) {
+    const expiryDate = new Date(expires_at);
+    const now = new Date();
+    const diffMs = expiryDate.getTime() - now.getTime();
+    days_until_expiration = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  }
+
   return {
     domain: `${domain}.${tld}`,
     available,
@@ -270,6 +412,9 @@ function createWhoisResult(
     registrar: 'unknown',
     source: 'whois',
     checked_at: new Date().toISOString(),
+    expires_at,
+    registered_at,
+    days_until_expiration,
   };
 }
 

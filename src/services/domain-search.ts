@@ -38,6 +38,7 @@ import {
 } from '../registrars/index.js';
 import { checkRdap, isRdapAvailable } from '../fallbacks/rdap.js';
 import { checkWhois, isWhoisAvailable } from '../fallbacks/whois.js';
+import { reportTakenDomains } from './negative-cache.js';
 import { fetchPricingQuote, fetchPricingCompare } from './pricing-api.js';
 import type {
   PricingQuoteResponse,
@@ -373,6 +374,17 @@ async function searchSingleDomain(
         const cacheKey = domainCacheKey(fullDomain, result.source);
         const ttlMs = result.available ? CACHE_TTL_AVAILABLE_MS : CACHE_TTL_TAKEN_MS;
         domainCache.set(cacheKey, result, ttlMs);
+
+        // Report taken domains to federated negative cache
+        if (!result.available && config.negativeCache.enabled) {
+          reportTakenDomains([{
+            fqdn: result.domain,
+            expires_at: result.expires_at,
+            registered_at: result.registered_at,
+            source: result.source,
+          }]);
+        }
+
         return { result, fromCache: false };
       }
     } catch (error) {

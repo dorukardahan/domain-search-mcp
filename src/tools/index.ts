@@ -64,3 +64,10 @@ export {
   executeHuntDomains,
   type HuntDomainsInput,
 } from './hunt_domains.js';
+
+export {
+  expiringDomainsTool,
+  expiringDomainsSchema,
+  executeExpiringDomains,
+  type ExpiringDomainsInput,
+} from './expiring_domains.js';

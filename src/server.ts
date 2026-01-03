@@ -15,6 +15,7 @@
  * - check_socials: Check social handle availability
  * - analyze_project: Extract context from projects for domain suggestions
  * - hunt_domains: Find valuable domains for investment
+ * - expiring_domains: Find domains about to expire (federated cache)
  *
  * @see https://github.com/yourusername/domain-search-mcp
  */
@@ -50,6 +51,8 @@ import {
   executeAnalyzeProject,
   huntDomainsTool,
   executeHuntDomains,
+  expiringDomainsTool,
+  executeExpiringDomains,
 } from './tools/index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -57,7 +60,7 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SERVER_NAME = 'domain-search-mcp';
-const SERVER_VERSION = '1.4.0';
+const SERVER_VERSION = '1.5.0';
 
 /**
  * All available tools.
@@ -72,6 +75,7 @@ const TOOLS: Tool[] = [
   checkSocialsTool as Tool,
   analyzeProjectTool as Tool,
   huntDomainsTool as Tool,
+  expiringDomainsTool as Tool,
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -200,6 +204,9 @@ async function executeToolCall(
 
     case 'hunt_domains':
       return executeHuntDomains(args as Parameters<typeof executeHuntDomains>[0]);
+
+    case 'expiring_domains':
+      return executeExpiringDomains(args as Parameters<typeof executeExpiringDomains>[0]);
 
     default:
       throw new DomainSearchError(

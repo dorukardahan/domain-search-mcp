@@ -12,6 +12,7 @@ import { parseSedoFeed, type SedoAuctionListing } from '../aftermarket/sedo.js';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 import { scoreDomainName } from '../utils/semantic-engine.js';
+import { queryTakenDomains } from './negative-cache.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -554,7 +555,40 @@ export async function huntDomains(criteria: HuntCriteria): Promise<HuntDomainsRe
   scoredCandidates.sort((a, b) => b.preScore - a.preScore);
 
   // Check top candidates (limit API calls)
-  const toCheck = scoredCandidates.slice(0, Math.min(50, maxResults * 3));
+  let toCheck = scoredCandidates.slice(0, Math.min(50, maxResults * 3));
+
+  // Pre-filter known-taken domains from federated negative cache
+  if (config.negativeCache.enabled && toCheck.length > 0) {
+    const fqdns = toCheck.flatMap(({ name }) =>
+      tlds.map(tld => `${name}.${tld}`)
+    );
+
+    try {
+      const takenResult = await queryTakenDomains(fqdns);
+
+      if (takenResult.taken.size > 0) {
+        const beforeCount = toCheck.length;
+        // Keep candidates where at least one TLD is not known-taken
+        toCheck = toCheck.filter(({ name }) =>
+          !tlds.every(tld => takenResult.taken.has(`${name}.${tld}`.toLowerCase()))
+        );
+
+        const filtered = beforeCount - toCheck.length;
+        if (filtered > 0) {
+          insights.push(`Pre-filtered ${filtered} known-taken domains`);
+          logger.debug('Domain hunter pre-filter', {
+            before: beforeCount,
+            after: toCheck.length,
+            filtered,
+          });
+        }
+      }
+    } catch (error) {
+      logger.debug('Negative cache query failed, continuing without pre-filter', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   // SECURITY: Reduced from 5 to 3 to prevent rate limit exhaustion
   // With 3 TLDs per candidate: 3 × 3 = 9 concurrent requests (safe threshold)

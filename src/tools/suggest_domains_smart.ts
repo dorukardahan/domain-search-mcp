@@ -17,7 +17,9 @@ import {
   scoreDomainName,
   getSynonyms,
   getIndustryTerms,
+  filterKnownTakenSuggestions,
 } from '../utils/semantic-engine.js';
+import { config } from '../config.js';
 import { godaddyPublicAdapter, type GodaddySuggestion } from '../registrars/index.js';
 import { logger } from '../utils/logger.js';
 import type { DomainResult } from '../types.js';
@@ -441,12 +443,29 @@ export async function executeSuggestDomainsSmart(
     }
 
     // Then, check semantic suggestions that weren't in GoDaddy results
-    const semanticOnlyCandidates = styledSuggestions
+    let semanticOnlyCandidates = styledSuggestions
       .filter(name => {
         const fullDomain = `${name}.${tld}`.toLowerCase();
         return domainSources.get(fullDomain) === 'semantic_engine';
       })
-      .slice(0, max_suggestions); // Limit API calls
+      .slice(0, max_suggestions * 2); // Get extra for pre-filtering
+
+    // Pre-filter known-taken domains from federated negative cache
+    if (config.negativeCache.enabled && semanticOnlyCandidates.length > 0) {
+      const beforeCount = semanticOnlyCandidates.length;
+      semanticOnlyCandidates = await filterKnownTakenSuggestions(semanticOnlyCandidates, tld);
+      const filtered = beforeCount - semanticOnlyCandidates.length;
+      if (filtered > 0) {
+        logger.debug('Smart suggestions pre-filter', {
+          before: beforeCount,
+          after: semanticOnlyCandidates.length,
+          filtered,
+        });
+      }
+    }
+
+    // Limit after pre-filtering
+    semanticOnlyCandidates = semanticOnlyCandidates.slice(0, max_suggestions);
 
     const BATCH_SIZE = 5;
     for (let i = 0; i < semanticOnlyCandidates.length; i += BATCH_SIZE) {

@@ -120,6 +120,10 @@ export function loadConfig(): Config {
   const hasPricingApi = !!pricingApiUrl;
   const hasQwen = !!qwenEndpoint;
 
+  // SECURITY: Validate negative cache URL to prevent SSRF
+  const negativeCacheUrl = validateExternalUrl(env.NEGATIVE_CACHE_URL);
+  const hasNegativeCache = parseBool(env.NEGATIVE_CACHE_ENABLED, false) && !!negativeCacheUrl;
+
   const config: Config = {
     porkbun: {
       apiKey: env.PORKBUN_API_KEY,
@@ -188,6 +192,16 @@ export function loadConfig(): Config {
       ),
       nsTimeoutMs: parseIntWithDefault(env.AFTERMARKET_NS_TIMEOUT_MS, 1500),
     },
+    negativeCache: {
+      enabled: hasNegativeCache,
+      baseUrl: negativeCacheUrl, // SSRF-validated URL
+      token: env.NEGATIVE_CACHE_TOKEN,
+      timeoutMs: parseIntWithDefault(env.NEGATIVE_CACHE_TIMEOUT_MS, 2000),
+      reportBatchSize: parseIntWithDefault(env.NEGATIVE_CACHE_BATCH_SIZE, 50),
+      reportDebounceMs: parseIntWithDefault(env.NEGATIVE_CACHE_DEBOUNCE_MS, 5000),
+      localCacheTtl: parseIntWithDefault(env.NEGATIVE_CACHE_LOCAL_TTL, 3600),
+      concurrency: parseIntWithDefault(env.NEGATIVE_CACHE_CONCURRENCY, 2),
+    },
   };
 
   return config;
@@ -211,6 +225,7 @@ export function hasRegistrarApi(): boolean {
  */
 export function getAvailableSources(): string[] {
   const sources: string[] = [];
+  if (config.negativeCache.enabled) sources.push('negative_cache');
   if (config.qwenInference?.enabled) sources.push('qwen_inference');
   if (config.pricingApi.enabled) sources.push('pricing_api');
   if (config.porkbun.enabled) sources.push('porkbun');

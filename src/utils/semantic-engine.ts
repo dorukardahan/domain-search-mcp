@@ -5,6 +5,9 @@
  * Uses linguistic algorithms, word databases, and pattern matching.
  */
 
+import { config } from '../config.js';
+import { queryTakenDomains } from '../services/negative-cache.js';
+
 /**
  * Common word synonyms for domain name variations.
  */
@@ -523,6 +526,36 @@ export function scoreDomainName(name: string, originalInput: string): number {
   if (!/\d/.test(name)) score += 5;
 
   return score;
+}
+
+/**
+ * Filter out known-taken domains from suggestions.
+ *
+ * Uses the federated negative cache to remove suggestions
+ * that are already known to be registered.
+ *
+ * @param suggestions Array of domain name suggestions (without TLD)
+ * @param tld The TLD to check against
+ * @returns Filtered array with known-taken domains removed
+ */
+export async function filterKnownTakenSuggestions(
+  suggestions: string[],
+  tld: string,
+): Promise<string[]> {
+  if (!config.negativeCache.enabled || suggestions.length === 0) {
+    return suggestions;
+  }
+
+  // Build FQDNs and query the negative cache
+  const fqdns = suggestions.map(s => `${s}.${tld}`);
+  const result = await queryTakenDomains(fqdns);
+
+  // Filter out domains that are known to be taken
+  if (result.taken.size === 0) {
+    return suggestions;
+  }
+
+  return suggestions.filter(s => !result.taken.has(`${s}.${tld}`.toLowerCase()));
 }
 
 export { MODERN_SUFFIXES, MODERN_PREFIXES, INDUSTRY_TERMS, SYNONYMS };

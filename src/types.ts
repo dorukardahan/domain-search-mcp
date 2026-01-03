@@ -309,6 +309,26 @@ export interface Config {
     nsCacheTtl: number;
     nsTimeoutMs: number;
   };
+
+  // Federated negative cache (taken domains)
+  negativeCache: {
+    /** Enable federated cache reporting and querying */
+    enabled: boolean;
+    /** Backend API base URL (SSRF-validated) */
+    baseUrl?: string;
+    /** Bearer token for API authentication */
+    token?: string;
+    /** Request timeout in milliseconds */
+    timeoutMs: number;
+    /** Batch size for reporting taken domains */
+    reportBatchSize: number;
+    /** Debounce time for batching reports (ms) */
+    reportDebounceMs: number;
+    /** Local query cache TTL in seconds */
+    localCacheTtl: number;
+    /** Max concurrent API requests */
+    concurrency: number;
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
