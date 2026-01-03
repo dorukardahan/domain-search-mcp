@@ -528,6 +528,22 @@ function applyGodaddySignal(
     return;
   }
 
+  // CRITICAL FIX: GoDaddy's availability signal is more reliable than RDAP
+  // RDAP can return 404 (interpreted as "available") for:
+  // - Reserved domains
+  // - Premium domains held by registry
+  // - Rate-limited requests
+  // - Domains the RDAP server doesn't track
+  // When GoDaddy says "unavailable", trust it over RDAP's "available"
+  if (!signal.available && result.available) {
+    logger.debug('GoDaddy corrected RDAP false positive', {
+      domain: result.domain,
+      rdap_said: 'available',
+      godaddy_says: 'unavailable',
+    });
+    result.available = false;
+  }
+
   if (signal.premium || signal.auction) {
     if (signal.premium) {
       result.premium = true;

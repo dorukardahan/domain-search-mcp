@@ -27,7 +27,7 @@ import { RegistrarApiError } from '../utils/errors.js';
  * GoDaddy public endpoint.
  */
 const GODADDY_PUBLIC_ENDPOINT = 'https://api.godaddy.com/v1/domains/mcp';
-const GODADDY_TIMEOUT_MS = 900;
+const GODADDY_TIMEOUT_MS = 3000; // Increased from 900ms - GoDaddy signal is critical for accuracy
 
 /**
  * JSON-RPC request ID counter.
