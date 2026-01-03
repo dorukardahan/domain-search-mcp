@@ -32,7 +32,9 @@ tools/*.ts (Tool definitions + executors)
     ↓
 services/domain-search.ts (Orchestration layer)
     ↓
-registrars/*.ts (API adapters) → Porkbun, Namecheap, GoDaddy
+registrars/*.ts (API adapters) → Porkbun, Namecheap
+    or
+services/pricing-api.ts (Backend for pricing + availability correction)
     or
 fallbacks/*.ts (RDAP, WHOIS)
 ```
@@ -51,11 +53,13 @@ fallbacks/*.ts (RDAP, WHOIS)
 - Standardized `DomainResult` creation
 
 **Domain Search Service** (`src/services/domain-search.ts`): Orchestrates source selection:
-1. Porkbun API (if configured)
-2. Namecheap API (if configured)
-3. GoDaddy public endpoint (always available, no auth)
-4. RDAP fallback
-5. WHOIS last resort
+1. RDAP (fast, public registry data) - availability check
+2. Pricing API backend (if `PRICING_API_BASE_URL` set) - pricing + **availability correction**
+3. Porkbun API (if BYOK keys configured)
+4. Namecheap API (if BYOK keys configured)
+5. WHOIS (last resort fallback)
+
+**Important**: Backend's Porkbun response overrides RDAP false positives.
 
 **Utilities** (`src/utils/`):
 - `cache.ts`: TTL-based in-memory cache
@@ -89,3 +93,42 @@ Server works without API keys (falls back to RDAP/WHOIS). For pricing data, conf
 2. Implement `search()`, `getTldInfo()`, `isEnabled()`
 3. Export from `src/registrars/index.ts`
 4. Add to source selection logic in `services/domain-search.ts`
+
+## NPM Release Workflow
+
+**IMPORTANT**: Never manually run `npm publish`. Always use Git tags to trigger GitHub Actions.
+
+### Correct Release Process
+
+```bash
+# 1. Make code changes
+# 2. Update version in package.json (e.g., "1.6.3")
+
+# 3. Commit and push
+git add -A
+git commit -m "feat: description of changes"
+git push origin main
+
+# 4. Create and push version tag - THIS TRIGGERS THE RELEASE
+git tag v1.6.3
+git push origin v1.6.3
+
+# 5. GitHub Actions automatically:
+#    ✓ Runs npm ci && npm run build
+#    ✓ Publishes to npm with provenance attestation
+#    ✓ Creates GitHub Release with release notes
+```
+
+### Why Not Manual `npm publish`?
+
+| Method | Provenance | Automated | Release Notes |
+|--------|------------|-----------|---------------|
+| Manual `npm publish` | ❌ | ❌ | ❌ |
+| Git tag → Actions | ✅ | ✅ | ✅ |
+
+Provenance proves the package was built from the exact GitHub commit.
+
+### Workflow Files
+
+- `.github/workflows/release.yml` - Triggered on `v*.*.*` tags
+- `.github/workflows/release-drafter.yml` - Auto-generates release notes
