@@ -57,7 +57,7 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SERVER_NAME = 'domain-search-mcp';
-const SERVER_VERSION = '1.3.2';
+const SERVER_VERSION = '1.4.0';
 
 /**
  * All available tools.
@@ -161,98 +161,45 @@ function createServer(): Server {
 
 /**
  * Execute a tool call by name.
+ *
+ * SECURITY: Each executor internally validates input with Zod schemas.
+ * We pass raw args directly to let Zod handle type coercion and validation,
+ * which prevents type confusion attacks where e.g. a string is passed
+ * instead of an array.
  */
 async function executeToolCall(
   name: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
+  // All executors internally use Zod schemas for validation.
+  // Passing raw args ensures proper type coercion and error messages.
   switch (name) {
     case 'search_domain':
-      return executeSearchDomain({
-        domain_name: args.domain_name as string,
-        tlds: args.tlds as string[] | undefined,
-        registrars: args.registrars as string[] | undefined,
-      });
+      return executeSearchDomain(args as Parameters<typeof executeSearchDomain>[0]);
 
     case 'bulk_search':
-      return executeBulkSearch({
-        domains: args.domains as string[],
-        tld: (args.tld as string) || 'com',
-        registrar: args.registrar as string | undefined,
-      });
+      return executeBulkSearch(args as Parameters<typeof executeBulkSearch>[0]);
 
     case 'compare_registrars':
-      return executeCompareRegistrars({
-        domain: args.domain as string,
-        tld: args.tld as string,
-        registrars: args.registrars as string[] | undefined,
-      });
+      return executeCompareRegistrars(args as Parameters<typeof executeCompareRegistrars>[0]);
 
     case 'suggest_domains':
-      return executeSuggestDomains({
-        base_name: args.base_name as string,
-        tld: (args.tld as string) || 'com',
-        variants: args.variants as
-          | Array<'hyphen' | 'numbers' | 'abbreviations' | 'synonyms' | 'prefixes' | 'suffixes'>
-          | undefined,
-        max_suggestions: (args.max_suggestions as number) || 10,
-      });
+      return executeSuggestDomains(args as Parameters<typeof executeSuggestDomains>[0]);
 
     case 'suggest_domains_smart':
-      return executeSuggestDomainsSmart({
-        query: args.query as string,
-        tld: (args.tld as string) || 'com',
-        industry: args.industry as
-          | 'tech' | 'startup' | 'finance' | 'health' | 'food' | 'creative' | 'ecommerce' | 'education' | 'gaming' | 'social'
-          | undefined,
-        style: (args.style as 'brandable' | 'descriptive' | 'short' | 'creative') || 'brandable',
-        max_suggestions: (args.max_suggestions as number) || 15,
-        include_premium: (args.include_premium as boolean) || false,
-        project_context: args.project_context as {
-          name?: string;
-          description?: string;
-          keywords?: string[];
-          industry?: string;
-          repository_url?: string;
-        } | undefined,
-      });
+      return executeSuggestDomainsSmart(args as Parameters<typeof executeSuggestDomainsSmart>[0]);
 
     case 'tld_info':
-      return executeTldInfo({
-        tld: args.tld as string,
-        detailed: (args.detailed as boolean) || false,
-      });
+      return executeTldInfo(args as Parameters<typeof executeTldInfo>[0]);
 
     case 'check_socials':
-      return executeCheckSocials({
-        name: args.name as string,
-        platforms: args.platforms as
-          | Array<'github' | 'twitter' | 'instagram' | 'linkedin' | 'tiktok'>
-          | undefined,
-      });
+      return executeCheckSocials(args as Parameters<typeof executeCheckSocials>[0]);
 
     case 'analyze_project':
-      return executeAnalyzeProject({
-        path: args.path as string,
-        include_source_files: (args.include_source_files as boolean) || false,
-        suggest_domains: args.suggest_domains !== false, // Default true
-        tld: (args.tld as string) || 'com',
-        max_suggestions: (args.max_suggestions as number) || 10,
-        style: (args.style as 'brandable' | 'descriptive' | 'short' | 'creative') || 'brandable',
-      });
+      return executeAnalyzeProject(args as Parameters<typeof executeAnalyzeProject>[0]);
 
     case 'hunt_domains':
-      return executeHuntDomains({
-        keywords: args.keywords as string[] | undefined,
-        tlds: (args.tlds as string[]) || ['com', 'io', 'co'],
-        min_length: (args.min_length as number) || 3,
-        max_length: (args.max_length as number) || 12,
-        include_aftermarket: args.include_aftermarket !== false, // Default true
-        max_aftermarket_price: args.max_aftermarket_price as number | undefined,
-        patterns: (args.patterns as Array<'short' | 'dictionary' | 'numeric' | 'brandable' | 'acronym'>) || ['short', 'brandable'],
-        max_results: (args.max_results as number) || 20,
-        score_threshold: (args.score_threshold as number) || 40,
-      });
+      return executeHuntDomains(args as Parameters<typeof executeHuntDomains>[0]);
 
     default:
       throw new DomainSearchError(

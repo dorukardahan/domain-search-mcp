@@ -556,7 +556,9 @@ export async function huntDomains(criteria: HuntCriteria): Promise<HuntDomainsRe
   // Check top candidates (limit API calls)
   const toCheck = scoredCandidates.slice(0, Math.min(50, maxResults * 3));
 
-  const BATCH_SIZE = 5;
+  // SECURITY: Reduced from 5 to 3 to prevent rate limit exhaustion
+  // With 3 TLDs per candidate: 3 × 3 = 9 concurrent requests (safe threshold)
+  const BATCH_SIZE = 3;
   for (let i = 0; i < toCheck.length && results.length < maxResults; i += BATCH_SIZE) {
     const batch = toCheck.slice(i, i + BATCH_SIZE);
 

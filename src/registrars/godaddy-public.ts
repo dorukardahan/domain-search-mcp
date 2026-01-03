@@ -74,8 +74,40 @@ export interface GodaddySuggestion {
 }
 
 /**
+ * Domain pattern for extraction (simple, non-backtracking).
+ * Matches: word.tld format like "example.com"
+ */
+const DOMAIN_PATTERN = /\b[a-z0-9][-a-z0-9]{0,61}[a-z0-9]?\.[a-z]{2,10}\b/gi;
+
+/**
+ * Section type for state machine parsing.
+ */
+type SectionType = 'available' | 'premium' | 'auction' | 'unavailable' | null;
+
+/**
+ * Detect section type from a line (ReDoS-safe).
+ * Uses simple string includes instead of complex regex.
+ */
+function detectSectionType(line: string): SectionType | 'continue' {
+  // Check for section headers (emoji + keyword pattern)
+  if (line.includes('✅') && (line.includes('AVAILABLE') || line.includes('STANDARD'))) {
+    return 'available';
+  }
+  if (line.includes('💎') && line.includes('PREMIUM')) {
+    return 'premium';
+  }
+  if (line.includes('🔨') && line.includes('AUCTION')) {
+    return 'auction';
+  }
+  if (line.includes('❌') && line.includes('UNAVAILABLE')) {
+    return 'unavailable';
+  }
+  return 'continue'; // Not a section header, continue in current section
+}
+
+/**
  * Parse suggestions from GoDaddy public domains_suggest response.
- * Response format varies but typically includes categorized domain lists.
+ * Uses ReDoS-safe line-by-line state machine parsing.
  */
 function parseSuggestResponse(text: string): GodaddySuggestion[] {
   const suggestions: GodaddySuggestion[] = [];
@@ -91,64 +123,52 @@ function parseSuggestResponse(text: string): GodaddySuggestion[] {
     }
   };
 
-  // ==== SECTION-BASED PARSING ====
-  // GoDaddy groups suggestions by category with emojis
+  // ==== LINE-BY-LINE STATE MACHINE (ReDoS-safe) ====
+  // Process each line, tracking current section
+  const lines = text.split('\n');
+  let currentSection: SectionType = null;
 
-  // ✅ Available/Standard domains
-  const availableMatch = text.match(/✅\s*\*\*(?:AVAILABLE|STANDARD)[^]*?(?=(?:💎|🔨|⚠️|❌|\*\*[A-Z])|$)/gi);
-  if (availableMatch) {
-    for (const section of availableMatch) {
-      // Extract domain names (word.tld format)
-      const domainMatches = section.match(/\b[a-z0-9][-a-z0-9]*\.[a-z]{2,}\b/gi);
-      if (domainMatches) {
-        for (const domain of domainMatches) {
-          addSuggestion(domain, true, false, false);
-        }
+  for (const line of lines) {
+    // Check for section transition
+    const sectionDetect = detectSectionType(line);
+    if (sectionDetect !== 'continue') {
+      currentSection = sectionDetect;
+      continue; // Section header line, move to next
+    }
+
+    // Skip if we're in unavailable section or no section yet
+    if (currentSection === 'unavailable' || currentSection === null) {
+      continue;
+    }
+
+    // Extract domains from this line (simple pattern, no backtracking risk)
+    const domainMatches = line.match(DOMAIN_PATTERN);
+    if (domainMatches) {
+      for (const domain of domainMatches) {
+        addSuggestion(
+          domain,
+          true, // available (we skip unavailable section)
+          currentSection === 'premium',
+          currentSection === 'auction',
+        );
       }
     }
   }
 
-  // 💎 Premium domains
-  const premiumMatch = text.match(/💎\s*\*\*PREMIUM[^]*?(?=(?:✅|🔨|⚠️|❌|\*\*[A-Z])|$)/gi);
-  if (premiumMatch) {
-    for (const section of premiumMatch) {
-      const domainMatches = section.match(/\b[a-z0-9][-a-z0-9]*\.[a-z]{2,}\b/gi);
-      if (domainMatches) {
-        for (const domain of domainMatches) {
-          addSuggestion(domain, true, true, false);
-        }
-      }
-    }
-  }
-
-  // 🔨 Auction domains
-  const auctionMatch = text.match(/🔨\s*\*\*AUCTION[^]*?(?=(?:✅|💎|⚠️|❌|\*\*[A-Z])|$)/gi);
-  if (auctionMatch) {
-    for (const section of auctionMatch) {
-      const domainMatches = section.match(/\b[a-z0-9][-a-z0-9]*\.[a-z]{2,}\b/gi);
-      if (domainMatches) {
-        for (const domain of domainMatches) {
-          addSuggestion(domain, true, false, true);
-        }
-      }
-    }
-  }
-
-  // ==== FALLBACK: Line-by-line extraction ====
-  // If section parsing didn't find much, try line-by-line
+  // ==== FALLBACK: Line-by-line context detection ====
+  // If state machine found nothing, try per-line context clues
   if (suggestions.length < 3) {
-    const lines = text.split('\n');
     for (const line of lines) {
       const lowerLine = line.toLowerCase();
 
-      // Skip header lines
+      // Skip header lines (contain ** but no domain-like content)
       if (lowerLine.includes('**') && !lowerLine.includes('.')) continue;
 
       // Extract any domain-like patterns
-      const domainMatches = line.match(/\b[a-z0-9][-a-z0-9]*\.[a-z]{2,}\b/gi);
+      const domainMatches = line.match(DOMAIN_PATTERN);
       if (domainMatches) {
         for (const domain of domainMatches) {
-          // Determine type from context
+          // Determine type from line context
           const isPremium = lowerLine.includes('premium') || lowerLine.includes('💎');
           const isAuction = lowerLine.includes('auction') || lowerLine.includes('🔨');
           const isUnavailable = lowerLine.includes('❌') || lowerLine.includes('unavailable');
@@ -162,6 +182,10 @@ function parseSuggestResponse(text: string): GodaddySuggestion[] {
   return suggestions;
 }
 
+/**
+ * Parse availability response using ReDoS-safe line-by-line parsing.
+ * Uses state machine approach instead of complex regex with lookaheads.
+ */
 function parseAvailabilityResponse(text: string, domain: string): ParsedAvailability {
   const normalizedDomain = domain.toLowerCase();
   const normalizedText = text.toLowerCase();
@@ -208,43 +232,44 @@ function parseAvailabilityResponse(text: string, domain: string): ParsedAvailabi
     }
   }
 
-  // ==== BULK DOMAIN FORMAT ====
-  // Check if domain appears in available section
-  // GoDaddy formats: "✅ **AVAILABLE DOMAINS" or "✅ **STANDARD SUGGESTIONS"
-  const availableMatch = text.match(/✅\s*\*\*(?:AVAILABLE|STANDARD)[^]*?(?=(?:💎|⚠️|❌|\*\*[A-Z])|$)/i);
-  if (availableMatch && availableMatch[0].toLowerCase().includes(normalizedDomain)) {
-    result.available = true;
-    return result;
-  }
-
-  // Check premium section
-  // GoDaddy format: "💎 **PREMIUM DOMAINS"
-  const premiumMatch = text.match(/💎\s*\*\*PREMIUM[^]*?(?=(?:⚠️|❌|\*\*[A-Z])|$)/i);
-  if (premiumMatch && premiumMatch[0].toLowerCase().includes(normalizedDomain)) {
-    result.available = true;
-    result.premium = true;
-    return result;
-  }
-
-  // Check auction section
-  // GoDaddy format: "🔨 **AUCTION DOMAINS" or similar
-  const auctionMatch = text.match(/🔨\s*\*\*AUCTION[^]*?(?=(?:💎|⚠️|❌|\*\*[A-Z])|$)/i);
-  if (auctionMatch && auctionMatch[0].toLowerCase().includes(normalizedDomain)) {
-    result.available = true;
-    result.auction = true;
-    return result;
-  }
-
-  // Check unavailable section
-  // GoDaddy format: "❌ **UNAVAILABLE DOMAINS"
-  const unavailableMatch = text.match(/❌\s*\*\*UNAVAILABLE[^]*?(?=(?:💎|⚠️|\*\*[A-Z])|$)/i);
-  if (unavailableMatch && unavailableMatch[0].toLowerCase().includes(normalizedDomain)) {
-    result.available = false;
-    return result;
-  }
-
-  // ==== FALLBACK: LINE-BY-LINE ANALYSIS ====
+  // ==== BULK DOMAIN FORMAT (ReDoS-safe line-by-line) ====
+  // Use state machine to track which section we're in
   const lines = text.split('\n');
+  let currentSection: SectionType = null;
+
+  for (const line of lines) {
+    // Check for section transition
+    const sectionDetect = detectSectionType(line);
+    if (sectionDetect !== 'continue') {
+      currentSection = sectionDetect;
+      continue;
+    }
+
+    // Check if this line contains our domain
+    if (line.toLowerCase().includes(normalizedDomain)) {
+      switch (currentSection) {
+        case 'available':
+          result.available = true;
+          return result;
+        case 'premium':
+          result.available = true;
+          result.premium = true;
+          return result;
+        case 'auction':
+          result.available = true;
+          result.auction = true;
+          return result;
+        case 'unavailable':
+          result.available = false;
+          return result;
+        default:
+          // Domain found but not in a known section, continue checking
+          break;
+      }
+    }
+  }
+
+  // ==== FALLBACK: LINE-BY-LINE CONTEXT ANALYSIS ====
   for (const line of lines) {
     const lowerLine = line.toLowerCase();
 

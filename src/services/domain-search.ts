@@ -222,38 +222,41 @@ export async function searchDomain(
     tlds: normalizedTlds,
   });
 
-  // GoDaddy signal (premium/auction) for search_domain only
-  let godaddySignals: Map<string, ParsedAvailability> | null = null;
-  if (includeGodaddySignals) {
-    try {
-      const fullDomains = normalizedTlds.map((tld) =>
-        buildDomain(normalizedDomain, tld),
-      );
-      godaddySignals = await godaddyPublicAdapter.bulkSearch(fullDomains);
-    } catch (error) {
-      logger.debug('GoDaddy signal lookup failed', {
-        domain: normalizedDomain,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
   // Search each TLD
   const results: DomainResult[] = [];
   const errors: string[] = [];
   let fromCache = false;
 
-  // Run TLD checks with concurrency limits
+  // OPTIMIZATION: Run GoDaddy signals and main TLD searches in PARALLEL
+  // GoDaddy signal lookup should not block the main search
+  const fullDomains = normalizedTlds.map((tld) =>
+    buildDomain(normalizedDomain, tld),
+  );
+
+  // Start GoDaddy lookup (non-blocking)
+  const godaddyPromise = includeGodaddySignals
+    ? godaddyPublicAdapter.bulkSearch(fullDomains).catch((error) => {
+        logger.debug('GoDaddy signal lookup failed', {
+          domain: normalizedDomain,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      })
+    : Promise.resolve(null);
+
+  // Run TLD checks with concurrency limits (parallel with GoDaddy)
   const limiter = new ConcurrencyLimiter(SEARCH_TLD_CONCURRENCY);
-  const outcomes = await Promise.all(
+  const tldSearchPromise = Promise.all(
     normalizedTlds.map((tld) =>
       limiter.run(async () => {
         try {
+          // Note: godaddySignals will be null during initial search
+          // We merge signals after both complete
           const result = await searchSingleDomain(
             normalizedDomain,
             tld,
             preferredRegistrars,
-            godaddySignals,
+            null, // GoDaddy signals applied post-hoc
             pricingBudget,
           );
           if (result.fromCache) fromCache = true;
@@ -266,8 +269,21 @@ export async function searchDomain(
     ),
   );
 
+  // Wait for both to complete in parallel
+  const [godaddySignals, outcomes] = await Promise.all([
+    godaddyPromise,
+    tldSearchPromise,
+  ]);
+
   for (const outcome of outcomes) {
     if (outcome.success) {
+      // Apply GoDaddy signals post-hoc (from parallel lookup)
+      if (godaddySignals) {
+        const signal = godaddySignals.get(outcome.result.domain.toLowerCase());
+        if (signal) {
+          applyGodaddySignal(outcome.result, signal);
+        }
+      }
       results.push(outcome.result);
     } else {
       errors.push(`${outcome.tld}: ${outcome.error.userMessage}`);

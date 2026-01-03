@@ -45,7 +45,7 @@ export class TtlCache<T> {
 
   /**
    * Get a value from cache if it exists and hasn't expired.
-   * Updates lastAccessedAt for LRU tracking.
+   * Moves entry to end of Map for O(1) LRU tracking via insertion order.
    */
   get(key: string): T | undefined {
     const entry = this.cache.get(key);
@@ -62,8 +62,11 @@ export class TtlCache<T> {
       return undefined;
     }
 
-    // Update last accessed time for LRU
+    // LRU optimization: Move to end of Map by re-inserting (O(1) operation)
+    // This makes evictLRU() O(1) by using Map insertion order
+    this.cache.delete(key);
     entry.lastAccessedAt = now;
+    this.cache.set(key, entry);
 
     logger.debug('Cache hit', { key, age_ms: now - entry.createdAt });
     return entry.value;
@@ -89,7 +92,8 @@ export class TtlCache<T> {
     }
 
     // If at capacity, evict least recently used entries
-    if (this.cache.size >= this.maxSize) {
+    // SECURITY: Use while loop to handle concurrent insertion race conditions
+    while (this.cache.size >= this.maxSize) {
       this.evictLRU();
     }
 
@@ -109,22 +113,14 @@ export class TtlCache<T> {
 
   /**
    * Evict least recently used entry.
-   * Called when cache is at capacity.
+   * O(1) operation: Uses Map insertion order - first entry is oldest.
    */
   private evictLRU(): void {
-    let oldestKey: string | null = null;
-    let oldestTime = Infinity;
-
-    for (const [key, entry] of this.cache) {
-      if (entry.lastAccessedAt < oldestTime) {
-        oldestTime = entry.lastAccessedAt;
-        oldestKey = key;
-      }
-    }
-
-    if (oldestKey) {
-      this.cache.delete(oldestKey);
-      logger.debug('Cache LRU eviction', { evicted_key: oldestKey });
+    // Map.keys().next() returns the first (oldest) key in O(1)
+    const firstKey = this.cache.keys().next().value;
+    if (firstKey !== undefined) {
+      this.cache.delete(firstKey);
+      logger.debug('Cache LRU eviction', { evicted_key: firstKey });
     }
   }
 

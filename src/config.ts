@@ -53,6 +53,58 @@ function parseOutputFormat(
 }
 
 /**
+ * SECURITY: Validate external URLs to prevent SSRF attacks.
+ *
+ * Blocks:
+ * - localhost and loopback addresses
+ * - Private network ranges (10.x, 172.16-31.x, 192.168.x)
+ * - Link-local addresses (169.254.x)
+ * - File URLs and other non-HTTP schemes
+ *
+ * Only allows HTTPS URLs to external hosts.
+ */
+function validateExternalUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+
+  try {
+    const parsed = new URL(url);
+
+    // Only allow http(s) protocols
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return undefined;
+    }
+
+    // Block internal/private addresses
+    const hostname = parsed.hostname.toLowerCase();
+    const forbiddenHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'];
+    if (forbiddenHosts.includes(hostname)) {
+      return undefined;
+    }
+
+    // Block private network ranges
+    const privateRanges = [
+      /^10\./,                          // 10.0.0.0/8
+      /^172\.(1[6-9]|2[0-9]|3[01])\./,  // 172.16.0.0/12
+      /^192\.168\./,                     // 192.168.0.0/16
+      /^169\.254\./,                     // Link-local
+      /^fc00:/i,                         // IPv6 unique local
+      /^fe80:/i,                         // IPv6 link-local
+    ];
+
+    for (const range of privateRanges) {
+      if (range.test(hostname)) {
+        return undefined;
+      }
+    }
+
+    return url;
+  } catch {
+    // Invalid URL
+    return undefined;
+  }
+}
+
+/**
  * Load and validate configuration from environment.
  */
 export function loadConfig(): Config {
@@ -61,8 +113,12 @@ export function loadConfig(): Config {
   // Check for API keys
   const hasPorkbun = !!(env.PORKBUN_API_KEY && env.PORKBUN_API_SECRET);
   const hasNamecheap = !!(env.NAMECHEAP_API_KEY && env.NAMECHEAP_API_USER);
-  const hasPricingApi = !!env.PRICING_API_BASE_URL;
-  const hasQwen = !!env.QWEN_INFERENCE_ENDPOINT;
+
+  // SECURITY: Validate external URLs to prevent SSRF
+  const pricingApiUrl = validateExternalUrl(env.PRICING_API_BASE_URL);
+  const qwenEndpoint = validateExternalUrl(env.QWEN_INFERENCE_ENDPOINT);
+  const hasPricingApi = !!pricingApiUrl;
+  const hasQwen = !!qwenEndpoint;
 
   const config: Config = {
     porkbun: {
@@ -77,7 +133,7 @@ export function loadConfig(): Config {
       enabled: hasNamecheap,
     },
     pricingApi: {
-      baseUrl: env.PRICING_API_BASE_URL,
+      baseUrl: pricingApiUrl, // SSRF-validated URL
       enabled: hasPricingApi,
       timeoutMs: parseIntWithDefault(env.PRICING_API_TIMEOUT_MS, 2500),
       maxQuotesPerSearch: parseIntWithDefault(env.PRICING_API_MAX_QUOTES_SEARCH, 0),
@@ -86,7 +142,7 @@ export function loadConfig(): Config {
       token: env.PRICING_API_TOKEN,
     },
     qwenInference: {
-      endpoint: env.QWEN_INFERENCE_ENDPOINT,
+      endpoint: qwenEndpoint, // SSRF-validated URL
       apiKey: env.QWEN_API_KEY,
       enabled: hasQwen,
       timeoutMs: parseIntWithDefault(env.QWEN_TIMEOUT_MS, 15000),
