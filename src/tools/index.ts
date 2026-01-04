@@ -71,3 +71,10 @@ export {
   executeExpiringDomains,
   type ExpiringDomainsInput,
 } from './expiring_domains.js';
+
+export {
+  aiHealthTool,
+  aiHealthSchema,
+  executeAiHealth,
+  type AiHealthInput,
+} from './ai_health.js';

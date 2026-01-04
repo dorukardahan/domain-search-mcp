@@ -57,6 +57,8 @@ import {
   executeHuntDomains,
   expiringDomainsTool,
   executeExpiringDomains,
+  aiHealthTool,
+  executeAiHealth,
 } from './tools/index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -65,7 +67,7 @@ import {
 
 const SERVER_NAME = 'domain-search-mcp';
 // NOTE: Keep in sync with package.json version
-const SERVER_VERSION = '1.9.4';
+const SERVER_VERSION = '1.9.5';
 
 /**
  * All available tools.
@@ -81,6 +83,7 @@ const TOOLS: Tool[] = [
   analyzeProjectTool as Tool,
   huntDomainsTool as Tool,
   expiringDomainsTool as Tool,
+  aiHealthTool as Tool,
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -212,6 +215,9 @@ async function executeToolCall(
 
     case 'expiring_domains':
       return executeExpiringDomains(args as Parameters<typeof executeExpiringDomains>[0]);
+
+    case 'ai_health':
+      return executeAiHealth(args as Parameters<typeof executeAiHealth>[0]);
 
     default:
       throw new DomainSearchError(
