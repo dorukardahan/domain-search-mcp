@@ -10,6 +10,8 @@
 
 Fast, local-first domain availability checks for MCP clients. Works with zero configuration using public RDAP/WHOIS, and optionally enriches results with registrar pricing via a backend you control.
 
+**🆕 v1.8.0+**: AI-powered domain suggestions now work out of the box! No API keys needed - `suggest_domains_smart` uses our public fine-tuned Qwen 7B-DPO model.
+
 Built on the [Model Context Protocol](https://modelcontextprotocol.io) for Claude, Codex, VS Code, Cursor, Cline, and other MCP-compatible clients.
 
 ## What It Does
@@ -46,37 +48,52 @@ hints (public feed) and nameserver-based marketplace hints (Sedo/Dan/Afternic).
 
 ## Quick Start
 
+### Option 1: npx (Recommended)
+
+No installation needed - run directly:
+
+```bash
+npx -y domain-search-mcp@latest
+```
+
+### Option 2: From Source
+
 ```bash
 git clone https://github.com/dorukardahan/domain-search-mcp.git
 cd domain-search-mcp
 npm install
 npm run build
-```
-
-Run locally:
-
-```bash
 npm start
 ```
 
-Or via the CLI entrypoint:
+### MCP Client Config
 
-```bash
-npx domain-search-mcp
-```
-
-### MCP Client Config (Claude Desktop example)
-
+**Claude Code** (`.mcp.json` in project root):
 ```json
 {
   "mcpServers": {
     "domain-search": {
-      "command": "node",
-      "args": ["/path/to/domain-search-mcp/dist/server.js"]
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "domain-search-mcp@latest"]
     }
   }
 }
 ```
+
+**Claude Desktop** (`claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "domain-search": {
+      "command": "npx",
+      "args": ["-y", "domain-search-mcp@latest"]
+    }
+  }
+}
+```
+
+> **💡 Tip**: Always use `@latest` to ensure you're running the newest version with all features.
 
 ## Tools
 
@@ -84,7 +101,7 @@ npx domain-search-mcp
 - `bulk_search`: Check up to 100 names for a single TLD.
 - `compare_registrars`: Compare pricing across registrars (backend when configured).
 - `suggest_domains`: Generate variations (prefix/suffix/hyphen).
-- `suggest_domains_smart`: AI-assisted suggestions using the semantic engine plus GoDaddy suggestions.
+- `suggest_domains_smart`: **🤖 AI-powered** brandable name generation using fine-tuned Qwen 7B-DPO. Zero-config - works instantly!
 - `tld_info`: TLD metadata and restrictions.
 - `check_socials`: Username availability across platforms.
 
@@ -202,6 +219,37 @@ See `CHANGELOG.md` for release history.
 
 - Do not commit API keys or `.mcpregistry_*` files.
 - Without `PRICING_API_BASE_URL` (or BYOK keys), pricing is not available (availability still works).
+
+## Upgrading
+
+### For npx Users
+
+If you use `npx domain-search-mcp` (without `@latest`), npx may cache an old version.
+
+**Fix**: Update your MCP config to use `@latest`:
+```json
+"args": ["-y", "domain-search-mcp@latest"]
+```
+
+Or clear the npx cache manually:
+```bash
+npx clear-npx-cache  # then restart your MCP client
+```
+
+### For Source/Git Users
+
+```bash
+cd domain-search-mcp
+git pull origin main
+npm install
+npm run build
+```
+
+### Staying Updated
+
+- **Watch the repo**: Click "Watch" → "Releases only" on [GitHub](https://github.com/dorukardahan/domain-search-mcp) to get notified of new versions.
+- **Check releases**: See [GitHub Releases](https://github.com/dorukardahan/domain-search-mcp/releases) for changelog and upgrade notes.
+- **npm page**: [npmjs.com/package/domain-search-mcp](https://www.npmjs.com/package/domain-search-mcp) shows the latest version.
 
 ## Links
 
