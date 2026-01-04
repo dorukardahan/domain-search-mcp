@@ -66,7 +66,52 @@ npm run build
 npm start
 ```
 
-### MCP Client Config
+## Transport Options
+
+### stdio (Default)
+
+For MCP clients like Claude Desktop, Cursor, VS Code - uses stdin/stdout:
+
+```bash
+npx -y domain-search-mcp@latest
+```
+
+### HTTP/SSE (ChatGPT, Web Clients, LM Studio)
+
+For ChatGPT Actions, web apps, and REST API clients:
+
+```bash
+# Start HTTP server on port 3000
+npx -y domain-search-mcp@latest --http
+
+# Or with custom port
+MCP_PORT=8080 npx -y domain-search-mcp@latest --http
+```
+
+**Endpoints:**
+- `/mcp` - MCP protocol (POST for messages, GET for SSE stream)
+- `/api/tools/*` - REST API for each tool (ChatGPT Actions compatible)
+- `/openapi.json` - OpenAPI 3.1 specification
+- `/health` - Health check
+
+### ChatGPT Custom GPT Integration
+
+1. Start the HTTP server (see above)
+2. Expose via ngrok: `ngrok http 3000`
+3. In ChatGPT, create a Custom GPT and add an Action
+4. Import the OpenAPI spec from `https://your-ngrok-url.ngrok-free.dev/openapi.json`
+5. Test the tools!
+
+For production deployment, use a permanent domain with SSL instead of ngrok.
+
+**REST API Example:**
+```bash
+curl -X POST https://your-domain/api/tools/search_domain \
+  -H "Content-Type: application/json" \
+  -d '{"domain_name":"vibecoding"}'
+```
+
+## MCP Client Config
 
 **Claude Code** (`.mcp.json` in project root):
 ```json
@@ -140,6 +185,10 @@ NAMECHEAP_CLIENT_IP=your_whitelisted_ip
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `MCP_TRANSPORT` | stdio | Transport mode: `stdio` or `http` |
+| `MCP_PORT` | 3000 | HTTP server port (when using HTTP transport) |
+| `MCP_HOST` | 0.0.0.0 | HTTP server bind address |
+| `CORS_ORIGINS` | * | Allowed CORS origins (comma-separated) |
 | `PRICING_API_BASE_URL` | - | Pricing backend base URL |
 | `PRICING_API_TOKEN` | - | Optional bearer token |
 | `PRICING_API_TIMEOUT_MS` | 2500 | Backend request timeout |

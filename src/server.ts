@@ -28,6 +28,9 @@ import {
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 
+import { getTransportConfig, formatTransportInfo } from './transports/index.js';
+import { createHttpTransport } from './transports/http.js';
+
 import { config, getAvailableSources, hasRegistrarApi } from './config.js';
 import { logger, generateRequestId, setRequestId, clearRequestId } from './utils/logger.js';
 import { wrapError, DomainSearchError } from './utils/errors.js';
@@ -230,10 +233,14 @@ async function executeToolCall(
  * Main entry point.
  */
 async function main(): Promise<void> {
+  // Get transport configuration from CLI args and env vars
+  const transportConfig = getTransportConfig();
+
   // Log startup info
   logger.info('Domain Search MCP starting', {
     version: SERVER_VERSION,
     node_version: process.version,
+    transport: transportConfig.type,
     sources: getAvailableSources(),
     has_registrar_api: hasRegistrarApi(),
     dry_run: config.dryRun,
@@ -249,29 +256,54 @@ async function main(): Promise<void> {
     );
   }
 
-  // Create and start server
+  // Create MCP server
   const server = createServer();
-  const transport = new StdioServerTransport();
 
-  await server.connect(transport);
+  // Variable to hold HTTP transport for cleanup
+  let httpTransport: ReturnType<typeof createHttpTransport> | null = null;
 
-  logger.info('Domain Search MCP ready', {
-    tools: TOOLS.length,
-    transport: 'stdio',
-  });
+  // Connect based on transport type
+  if (transportConfig.type === 'http') {
+    // HTTP/SSE transport for web clients (ChatGPT, LM Studio, etc.)
+    httpTransport = createHttpTransport(server, transportConfig);
+    await httpTransport.start();
+
+    logger.info('Domain Search MCP ready', {
+      tools: TOOLS.length,
+      transport: formatTransportInfo(transportConfig),
+      port: transportConfig.port,
+      host: transportConfig.host,
+    });
+
+    // Log helpful URLs
+    const baseUrl = `http://${transportConfig.host === '0.0.0.0' ? 'localhost' : transportConfig.host}:${transportConfig.port}`;
+    logger.info(`MCP endpoint: ${baseUrl}/mcp`);
+    logger.info(`Health check: ${baseUrl}/health`);
+  } else {
+    // Stdio transport for Claude Desktop, Cursor, VS Code (default)
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+
+    logger.info('Domain Search MCP ready', {
+      tools: TOOLS.length,
+      transport: 'stdio',
+    });
+  }
 
   // Handle graceful shutdown
-  process.on('SIGINT', async () => {
-    logger.info('Shutting down...');
-    await server.close();
-    process.exit(0);
-  });
+  const shutdown = async (signal: string) => {
+    logger.info(`Received ${signal}, shutting down...`);
 
-  process.on('SIGTERM', async () => {
-    logger.info('Shutting down...');
+    if (httpTransport) {
+      await httpTransport.stop();
+    }
     await server.close();
+
     process.exit(0);
-  });
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 // Run the server

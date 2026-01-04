@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Domain Search",
+  "name_for_model": "domain_search",
+  "description_for_human": "Search domain availability, get AI-powered name suggestions, compare prices, and check social handles.",
+  "description_for_model": "Domain search and availability checking tool. Use this to:\n- Check if domains are available (search_domain, bulk_search)\n- Get AI-powered domain name suggestions (suggest_domains_smart)\n- Compare prices across registrars (compare_registrars)\n- Check social media handle availability (check_socials)\n- Analyze projects for domain ideas (analyze_project)\n- Find expiring domains (expiring_domains)\n- Hunt valuable domains (hunt_domains)\n- Get TLD information (tld_info)",
+  "api": {
+    "type": "openapi",
+    "url": "https://YOUR_DOMAIN/openapi.json"
+  },
+  "auth": {
+    "type": "none"
+  },
+  "logo_url": "https://YOUR_DOMAIN/logo.png",
+  "contact_email": "support@domain-search-mcp.com",
+  "legal_info_url": "https://github.com/dorukardahan/domain-search-mcp/blob/main/LICENSE"
+}
