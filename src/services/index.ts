@@ -22,3 +22,11 @@ export {
   type TogetherSuggestOptions,
   TOGETHER_MODELS,
 } from './together-inference.js';
+
+export {
+  getOpenRouterClient,
+  isOpenRouterConfigured,
+  OpenRouterInferenceClient,
+  type OpenRouterSuggestOptions,
+  OPENROUTER_MODELS,
+} from './openrouter-inference.js';

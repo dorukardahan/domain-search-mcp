@@ -120,8 +120,11 @@ export function loadConfig(): Config {
   const hasPricingApi = !!pricingApiUrl;
   const hasQwen = !!qwenEndpoint;
 
-  // Together.ai cloud inference (primary provider)
+  // Together.ai cloud inference (deprecated - use OpenRouter instead)
   const hasTogetherAi = !!env.TOGETHER_API_KEY;
+
+  // OpenRouter cloud inference (FALLBACK - 10x cheaper than Together.ai)
+  const hasOpenRouter = !!env.OPENROUTER_API_KEY;
 
   // SECURITY: Validate negative cache URL to prevent SSRF
   const negativeCacheUrl = validateExternalUrl(env.NEGATIVE_CACHE_URL);
@@ -161,6 +164,15 @@ export function loadConfig(): Config {
       timeoutMs: parseIntWithDefault(env.TOGETHER_TIMEOUT_MS, 30000),
       maxRetries: parseIntWithDefault(env.TOGETHER_MAX_RETRIES, 2),
       defaultModel: env.TOGETHER_DEFAULT_MODEL || 'qwen3-14b-instruct',
+    },
+    openRouter: {
+      apiKey: env.OPENROUTER_API_KEY,
+      enabled: hasOpenRouter,
+      timeoutMs: parseIntWithDefault(env.OPENROUTER_TIMEOUT_MS, 30000),
+      maxRetries: parseIntWithDefault(env.OPENROUTER_MAX_RETRIES, 2),
+      defaultModel: env.OPENROUTER_DEFAULT_MODEL || 'qwen2.5-72b',
+      siteUrl: env.OPENROUTER_SITE_URL,
+      siteName: env.OPENROUTER_SITE_NAME || 'domain-search-mcp',
     },
     logLevel: (env.LOG_LEVEL as Config['logLevel']) || 'info',
     cache: {
@@ -236,8 +248,9 @@ export function hasRegistrarApi(): boolean {
 export function getAvailableSources(): string[] {
   const sources: string[] = [];
   if (config.negativeCache.enabled) sources.push('negative_cache');
-  if (config.togetherAi?.enabled) sources.push('together_ai'); // Primary AI provider
-  if (config.qwenInference?.enabled) sources.push('qwen_inference'); // Local fallback
+  if (config.qwenInference?.enabled) sources.push('qwen_inference'); // PRIMARY: Local fine-tuned model
+  if (config.openRouter?.enabled) sources.push('openrouter'); // FALLBACK: Cloud AI (10x cheaper)
+  if (config.togetherAi?.enabled) sources.push('together_ai'); // Deprecated
   if (config.pricingApi.enabled) sources.push('pricing_api');
   if (config.porkbun.enabled) sources.push('porkbun');
   if (config.namecheap.enabled) sources.push('namecheap');

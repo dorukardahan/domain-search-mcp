@@ -277,7 +277,7 @@ export interface Config {
     maxRetries: number;
   };
 
-  // Together.ai inference (primary cloud AI provider - $50/mo budget)
+  // Together.ai inference (deprecated - use OpenRouter instead)
   togetherAi?: {
     apiKey?: string;
     enabled: boolean;
@@ -285,6 +285,21 @@ export interface Config {
     maxRetries: number;
     /** Default model (e.g., 'qwen3-14b-instruct', 'qwen2.5-72b') */
     defaultModel?: string;
+  };
+
+  // OpenRouter inference (FALLBACK cloud AI - 10x cheaper than Together.ai)
+  // PRIMARY is local fine-tuned model via qwenInference
+  openRouter?: {
+    apiKey?: string;
+    enabled: boolean;
+    timeoutMs: number;
+    maxRetries: number;
+    /** Default model (e.g., 'qwen2.5-72b', 'qwen2.5-7b') */
+    defaultModel?: string;
+    /** Site URL for OpenRouter analytics */
+    siteUrl?: string;
+    /** Site name for OpenRouter analytics */
+    siteName?: string;
   };
 
   // Logging

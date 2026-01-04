@@ -129,13 +129,14 @@ def main():
     )
 
     # Create DPO trainer
+    # Note: TRL 0.12+ renamed 'tokenizer' to 'processing_class'
     trainer = DPOTrainer(
         model=model,
         ref_model=None,  # Will use implicit reference
         args=training_args,
         train_dataset=dataset["train"],
         eval_dataset=dataset["test"],
-        tokenizer=tokenizer,
+        processing_class=tokenizer,  # TRL 0.12+ API
         peft_config=peft_config,
     )
 
