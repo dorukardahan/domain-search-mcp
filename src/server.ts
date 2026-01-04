@@ -65,7 +65,7 @@ import {
 
 const SERVER_NAME = 'domain-search-mcp';
 // NOTE: Keep in sync with package.json version
-const SERVER_VERSION = '1.9.3';
+const SERVER_VERSION = '1.9.4';
 
 /**
  * All available tools.

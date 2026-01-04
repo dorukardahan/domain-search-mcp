@@ -7,7 +7,7 @@
 
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
-import { ConcurrencyLimiter } from '../utils/concurrency.js';
+import { AdaptiveConcurrencyLimiter } from '../utils/adaptive-concurrency.js';
 import { TtlCache } from '../utils/cache.js';
 import type { PricingStatus } from '../types.js';
 
@@ -54,7 +54,17 @@ export type PricingCompareResponse = {
   best_renewal: { registrar: string; price: number; currency: string | null } | null;
 };
 
-const pricingLimiter = new ConcurrencyLimiter(config.pricingApi.concurrency);
+const pricingLimiter = new AdaptiveConcurrencyLimiter({
+  name: 'pricing_api',
+  minConcurrency: 2,
+  maxConcurrency: config.pricingApi.concurrency * 2, // Allow scaling up to 2x config
+  initialConcurrency: config.pricingApi.concurrency,
+  errorThreshold: 0.1,            // 10% error rate triggers decrease
+  latencyThresholdMs: 3000,       // Pricing API can be slow, 3s threshold
+  windowMs: 60_000,               // 1 minute window (less traffic than RDAP)
+  minSamples: 10,                 // Need 10 samples before adjusting
+  evaluationIntervalMs: 15_000,   // Evaluate every 15 seconds
+});
 const pricingCache = new TtlCache<PricingQuoteResponse>(
   config.cache.pricingTtl,
   5000,

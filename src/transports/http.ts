@@ -22,6 +22,8 @@ import { TransportConfig } from './index.js';
 import { generateOpenAPISpec } from '../openapi/generator.js';
 import { createApiRouter } from '../api/routes.js';
 import { getMetricsSummary } from '../utils/metrics.js';
+import { getAllCircuitStates } from '../utils/circuit-breaker.js';
+import { getAllAdaptiveStates } from '../utils/adaptive-concurrency.js';
 
 /**
  * Creates an Express server with MCP HTTP transport.
@@ -191,6 +193,8 @@ export function createHttpTransport(
       const metrics = getMetricsSummary();
       res.json({
         ...metrics,
+        circuit_breakers: getAllCircuitStates(),
+        adaptive_limiters: getAllAdaptiveStates(),
         active_sessions: transports.size,
         memory: {
           heap_used_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),

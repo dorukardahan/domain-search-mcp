@@ -9,3 +9,5 @@ export * from './validators.js';
 export * from './rate-limiter.js';
 export * from './metrics.js';
 export * from './circuit-breaker.js';
+export * from './adaptive-concurrency.js';
+export * from './concurrency.js';

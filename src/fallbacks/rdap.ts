@@ -12,7 +12,8 @@ import type { DomainResult } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { TimeoutError, RegistrarApiError } from '../utils/errors.js';
 import { TtlCache } from '../utils/cache.js';
-import { ConcurrencyLimiter, KeyedLimiter } from '../utils/concurrency.js';
+import { KeyedLimiter } from '../utils/concurrency.js';
+import { AdaptiveConcurrencyLimiter } from '../utils/adaptive-concurrency.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Zod Schemas for RDAP Response Validation (RFC 7483)
@@ -146,7 +147,17 @@ const rdapBootstrapCache = new TtlCache<Record<string, string>>(
 );
 let rdapBootstrapFallback: Record<string, string> | null = null;
 const rdapErrorCache = new TtlCache<boolean>(10, 5000);
-const rdapGlobalLimiter = new ConcurrencyLimiter(RDAP_GLOBAL_CONCURRENCY);
+const rdapGlobalLimiter = new AdaptiveConcurrencyLimiter({
+  name: 'rdap_global',
+  minConcurrency: 10,
+  maxConcurrency: RDAP_GLOBAL_CONCURRENCY,
+  initialConcurrency: 20,
+  errorThreshold: 0.15,          // 15% error rate triggers decrease
+  latencyThresholdMs: 600,       // RDAP timeout is 800ms, trigger at 600
+  windowMs: 30_000,              // 30 second window
+  minSamples: 20,                // Need 20 samples before adjusting
+  evaluationIntervalMs: 10_000,  // Evaluate every 10 seconds
+});
 const rdapHostLimiter = new KeyedLimiter(RDAP_HOST_CONCURRENCY);
 
 /**
