@@ -300,11 +300,23 @@ npm run build
 - **Check releases**: See [GitHub Releases](https://github.com/dorukardahan/domain-search-mcp/releases) for changelog and upgrade notes.
 - **npm page**: [npmjs.com/package/domain-search-mcp](https://www.npmjs.com/package/domain-search-mcp) shows the latest version.
 
+## Architecture
+
+For detailed system architecture diagrams, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
+
+- Transport layer (stdio vs HTTP/SSE)
+- Tool execution flow
+- Data source waterfall (RDAP → Pricing API → WHOIS)
+- VPS deployment architecture
+- AI suggestion flow
+- MCP session lifecycle
+
 ## Links
 
 - MCP Registry: https://registry.modelcontextprotocol.io
 - Glama page: https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp
 - Context7 index: https://context7.com/dorukardahan/domain-search-mcp
+- Architecture: docs/ARCHITECTURE.md
 - API reference: docs/API.md
 - Configuration: docs/CONFIGURATION.md
 - Workflows: docs/WORKFLOWS.md
