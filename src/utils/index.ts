@@ -8,3 +8,4 @@ export * from './cache.js';
 export * from './validators.js';
 export * from './rate-limiter.js';
 export * from './metrics.js';
+export * from './circuit-breaker.js';

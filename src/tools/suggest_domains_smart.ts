@@ -303,89 +303,116 @@ export async function executeSuggestDomainsSmart(
     };
 
     // ========================================
-    // STEP 1: Generate suggestions from ALL sources in parallel
+    // STEP 1: Generate suggestions from ALL sources in PARALLEL
     // ========================================
 
     // AI Source Priority (January 2026 - Zero-Config Design):
     // 1. PRIMARY: VPS fine-tuned Qwen 7B-DPO (llama-server:8000) - FREE, domain-specialized
-    // 2. FALLBACK: Together.ai (deprecated BYOK) - only if user configured
-    // 3. ALWAYS: Semantic engine (rule-based, offline)
+    // 2. FALLBACK: Together.ai (deprecated BYOK) - 3s delayed start to prefer VPS
+    // 3. ALWAYS: Semantic engine (rule-based, offline) - runs in parallel
 
     // P3 FIX: Rate limit AI inference calls
     checkRateLimit(inferenceRateLimiter, 'suggest_domains_smart', 'AI domain suggestions');
 
-    let aiSuggestions: Array<{ name: string; tld: string; reason?: string }> = [];
-    let aiSource: 'qwen_inference' | 'together_ai' | null = null;
+    // Common AI options
+    const aiOptions = {
+      query: normalizedQuery,
+      style,
+      tld,
+      max_suggestions: max_suggestions * 2,
+      temperature: style === 'creative' ? 0.9 : 0.7,
+      context: qwenContext,
+    };
 
-    // PRIMARY: VPS fine-tuned Qwen 7B-DPO (domain-specialized model)
-    // This is the default - works without any user configuration!
+    // Build parallel promise array for AI sources
+    type AIResult = {
+      suggestions: Array<{ name: string; tld: string; reason?: string }>;
+      source: 'qwen_inference' | 'together_ai';
+    };
+
+    const aiPromises: Promise<AIResult>[] = [];
+
+    // PRIMARY: VPS fine-tuned Qwen 7B-DPO (starts immediately)
     const qwenClient = getQwenClient();
     if (qwenClient) {
-      try {
-        const qwenResults = await qwenClient.suggest({
-          query: normalizedQuery,
-          style,
-          tld,
-          max_suggestions: max_suggestions * 2,
-          temperature: style === 'creative' ? 0.9 : 0.7,
-          context: qwenContext,
-        });
+      aiPromises.push(
+        qwenClient.suggest(aiOptions).then((results) => {
+          if (!results || results.length === 0) {
+            throw new Error('Empty Qwen results');
+          }
+          logger.debug('VPS Qwen completed (parallel)', { count: results.length });
+          return { suggestions: results, source: 'qwen_inference' as const };
+        })
+      );
+    }
 
-        if (qwenResults && qwenResults.length > 0) {
-          aiSuggestions = qwenResults;
-          aiSource = 'qwen_inference';
-          sourceStats.qwen_inference = qwenResults.length;
-          logger.debug('VPS fine-tuned Qwen 7B-DPO suggestions received (PRIMARY)', {
-            count: qwenResults.length,
-            sample: qwenResults.slice(0, 3).map(s => s.name),
-          });
-        }
-      } catch (error) {
-        logger.warn('VPS Qwen failed, trying Together.ai fallback', {
-          error: error instanceof Error ? error.message : 'unknown',
-        });
+    // FALLBACK: Together.ai (3s delayed start to prefer VPS)
+    if (isTogetherConfigured()) {
+      const togetherClient = getTogetherClient();
+      if (togetherClient) {
+        aiPromises.push(
+          new Promise<AIResult>((resolve, reject) => {
+            // 3s delay gives VPS priority
+            setTimeout(async () => {
+              try {
+                const results = await togetherClient.suggest(aiOptions);
+                if (!results || results.length === 0) {
+                  reject(new Error('Empty Together results'));
+                  return;
+                }
+                logger.debug('Together.ai completed (parallel fallback)', { count: results.length });
+                resolve({ suggestions: results, source: 'together_ai' as const });
+              } catch (error) {
+                reject(error);
+              }
+            }, 3000);
+          })
+        );
       }
     }
 
-    // FALLBACK: Together.ai (deprecated BYOK - for users who configured it)
-    if (aiSuggestions.length === 0 && isTogetherConfigured()) {
-      try {
-        const togetherClient = getTogetherClient();
-        if (togetherClient) {
-          const togetherResults = await togetherClient.suggest({
-            query: normalizedQuery,
-            style,
-            tld,
-            max_suggestions: max_suggestions * 2,
-            temperature: style === 'creative' ? 0.9 : 0.7,
-            context: qwenContext,
-          });
+    // Semantic engine runs in parallel (instant, offline)
+    const semanticPromise = Promise.resolve(
+      generateSmartSuggestions(normalizedQuery, {
+        maxSuggestions: max_suggestions * 3,
+        includePortmanteau: style === 'creative' || style === 'brandable',
+        includeSynonyms: style !== 'short',
+        includeIndustryTerms: !!detectedIndustry,
+        industry: detectedIndustry || undefined,
+      })
+    );
 
-          if (togetherResults && togetherResults.length > 0) {
-            aiSuggestions = togetherResults;
-            aiSource = 'together_ai';
-            sourceStats.together_ai = togetherResults.length;
-            logger.debug('Together.ai suggestions received (deprecated BYOK fallback)', {
-              count: togetherResults.length,
-              sample: togetherResults.slice(0, 3).map(s => s.name),
-            });
-          }
+    // Race AI sources - first success wins
+    let aiSuggestions: Array<{ name: string; tld: string; reason?: string }> = [];
+    let aiSource: 'qwen_inference' | 'together_ai' | null = null;
+
+    if (aiPromises.length > 0) {
+      try {
+        const winner = await Promise.any(aiPromises);
+        aiSuggestions = winner.suggestions;
+        aiSource = winner.source;
+
+        if (winner.source === 'qwen_inference') {
+          sourceStats.qwen_inference = winner.suggestions.length;
+        } else {
+          sourceStats.together_ai = winner.suggestions.length;
         }
+
+        logger.info('AI race winner', {
+          source: winner.source,
+          count: winner.suggestions.length,
+          sample: winner.suggestions.slice(0, 2).map(s => s.name),
+        });
       } catch (error) {
+        // All AI sources failed - AggregateError from Promise.any
         logger.warn('All AI sources failed, using semantic engine only', {
           error: error instanceof Error ? error.message : 'unknown',
         });
       }
     }
 
-    // Source 1: Our semantic engine
-    const semanticSuggestions = generateSmartSuggestions(normalizedQuery, {
-      maxSuggestions: max_suggestions * 3,
-      includePortmanteau: style === 'creative' || style === 'brandable',
-      includeSynonyms: style !== 'short',
-      includeIndustryTerms: !!detectedIndustry,
-      industry: detectedIndustry || undefined,
-    });
+    // Get semantic results (already completed or completing)
+    const semanticSuggestions = await semanticPromise;
     sourceStats.semantic_engine = semanticSuggestions.length;
 
     // ========================================

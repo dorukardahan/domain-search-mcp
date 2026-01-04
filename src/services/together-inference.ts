@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 import { TtlCache } from '../utils/cache.js';
+import { CircuitBreaker, CircuitOpenError } from '../utils/circuit-breaker.js';
 import type { QwenDomain, QwenContext, QwenSuggestOptions } from './qwen-inference.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -205,6 +206,7 @@ export class TogetherInferenceClient {
   private readonly maxRetries: number;
   private readonly defaultModel: string;
   private readonly cache: TtlCache<QwenDomain[]>;
+  private readonly circuitBreaker: CircuitBreaker;
 
   constructor(
     apiKey: string,
@@ -220,6 +222,15 @@ export class TogetherInferenceClient {
     this.maxRetries = options.maxRetries || 2;
     this.defaultModel = TOGETHER_MODELS[options.defaultModel || 'default'];
     this.cache = new TtlCache<QwenDomain[]>(options.cacheTtl || 3600, 1000);
+
+    // Circuit breaker: 5 failures in 60s → open for 30s
+    this.circuitBreaker = new CircuitBreaker({
+      name: 'together_ai',
+      failureThreshold: 5,
+      resetTimeoutMs: 30_000,
+      failureWindowMs: 60_000,
+      successThreshold: 2,
+    });
   }
 
   /**
@@ -253,13 +264,15 @@ export class TogetherInferenceClient {
 
     try {
       const startTime = Date.now();
-      const response = await this._makeRequestWithRetry({
-        model: modelId,
-        messages,
-        max_tokens: this._calculateMaxTokens(max_suggestions, style),
-        temperature,
-        stop: ['Query:', '\n\nQuery:'],
-      });
+      const response = await this.circuitBreaker.execute(() =>
+        this._makeRequestWithRetry({
+          model: modelId,
+          messages,
+          max_tokens: this._calculateMaxTokens(max_suggestions, style),
+          temperature,
+          stop: ['Query:', '\n\nQuery:'],
+        })
+      );
 
       const inferenceMs = Date.now() - startTime;
 
@@ -280,6 +293,14 @@ export class TogetherInferenceClient {
 
       return domains;
     } catch (error) {
+      // Circuit breaker open - fail fast
+      if (error instanceof CircuitOpenError) {
+        logger.debug('Together.ai circuit breaker open, skipping', {
+          resetAt: new Date(error.resetAt).toISOString(),
+        });
+        return null;
+      }
+
       if (error instanceof TogetherInferenceError) {
         logger.warn('Together.ai inference failed', {
           code: error.code,

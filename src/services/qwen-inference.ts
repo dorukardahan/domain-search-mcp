@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 import { TtlCache } from '../utils/cache.js';
+import { CircuitBreaker, CircuitOpenError } from '../utils/circuit-breaker.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STYLE CONFIGURATIONS
@@ -233,6 +234,7 @@ export class QwenInferenceClient {
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
   private readonly cache: TtlCache<QwenResponse>;
+  private readonly circuitBreaker: CircuitBreaker;
 
   constructor(
     endpoint: string,
@@ -248,6 +250,15 @@ export class QwenInferenceClient {
     this.timeoutMs = options.timeoutMs || 15000;
     this.maxRetries = options.maxRetries || 2;
     this.cache = new TtlCache<QwenResponse>(options.cacheTtl || 3600, 500);
+
+    // Circuit breaker: 5 failures in 60s → open for 30s
+    this.circuitBreaker = new CircuitBreaker({
+      name: 'qwen_inference',
+      failureThreshold: 5,
+      resetTimeoutMs: 30_000,
+      failureWindowMs: 60_000,
+      successThreshold: 2,
+    });
   }
 
   /**
@@ -270,14 +281,16 @@ export class QwenInferenceClient {
       return cached.domains;
     }
 
-    // Make request with retry
+    // Make request with retry + circuit breaker
     try {
-      const response = await this._makeRequestWithRetry({
-        prompt,
-        style,
-        max_tokens: this._calculateMaxTokens(max_suggestions, style),
-        temperature,
-      });
+      const response = await this.circuitBreaker.execute(() =>
+        this._makeRequestWithRetry({
+          prompt,
+          style,
+          max_tokens: this._calculateMaxTokens(max_suggestions, style),
+          temperature,
+        })
+      );
 
       // Validate response
       const validated = QwenResponseSchema.safeParse(response);
@@ -300,6 +313,14 @@ export class QwenInferenceClient {
 
       return validated.data.domains;
     } catch (error) {
+      // Circuit breaker open - fail fast
+      if (error instanceof CircuitOpenError) {
+        logger.debug('Qwen circuit breaker open, skipping', {
+          resetAt: new Date(error.resetAt).toISOString(),
+        });
+        return null;
+      }
+
       if (error instanceof QwenInferenceError) {
         logger.warn('Qwen inference failed', {
           code: error.code,
