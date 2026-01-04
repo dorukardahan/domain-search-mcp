@@ -67,7 +67,7 @@ const RDAP_BOOTSTRAP_TTL_SECONDS = 86400;
 
 const RDAP_TIMEOUT_MS = 800;
 const RDAP_ERROR_TTL_MS = 10_000;
-const RDAP_GLOBAL_CONCURRENCY = 20;
+const RDAP_GLOBAL_CONCURRENCY = 30;
 const RDAP_HOST_CONCURRENCY = 2;
 
 /**
@@ -445,4 +445,26 @@ export function isRdapAvailable(tld: string): boolean {
   // Use hardcoded servers for sync check
   // The async bootstrap will be tried during actual lookup
   return RDAP_SERVERS[tld] !== undefined;
+}
+
+/**
+ * Pre-warm the RDAP bootstrap cache.
+ *
+ * Call this during server startup to avoid 5s cold-start latency
+ * on the first RDAP lookup. Runs in background, doesn't block startup.
+ *
+ * @returns Promise that resolves when bootstrap is cached (or fails gracefully)
+ */
+export async function prewarmRdapBootstrap(): Promise<void> {
+  try {
+    // Trigger bootstrap fetch by looking up a TLD not in hardcoded list
+    // This forces getRdapServer to fetch from IANA
+    await getRdapServer('xyz');
+    logger.info('RDAP bootstrap pre-warmed successfully');
+  } catch (error) {
+    // Non-fatal - first lookup will retry
+    logger.warn('RDAP bootstrap pre-warm failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }

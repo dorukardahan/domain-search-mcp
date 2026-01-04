@@ -35,6 +35,7 @@ import { config, getAvailableSources, hasRegistrarApi } from './config.js';
 import { logger, generateRequestId, setRequestId, clearRequestId } from './utils/logger.js';
 import { wrapError, DomainSearchError } from './utils/errors.js';
 import { formatToolResult, formatToolError } from './utils/format.js';
+import { prewarmRdapBootstrap } from './fallbacks/rdap.js';
 import {
   searchDomainTool,
   executeSearchDomain,
@@ -64,7 +65,7 @@ import {
 
 const SERVER_NAME = 'domain-search-mcp';
 // NOTE: Keep in sync with package.json version
-const SERVER_VERSION = '1.8.1';
+const SERVER_VERSION = '1.9.2';
 
 /**
  * All available tools.
@@ -258,6 +259,13 @@ async function main(): Promise<void> {
 
   // Create MCP server
   const server = createServer();
+
+  // Pre-warm RDAP bootstrap cache in background (eliminates 5s cold-start latency)
+  prewarmRdapBootstrap().catch((err) => {
+    logger.debug('RDAP pre-warm failed (non-fatal)', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 
   // Variable to hold HTTP transport for cleanup
   let httpTransport: ReturnType<typeof createHttpTransport> | null = null;

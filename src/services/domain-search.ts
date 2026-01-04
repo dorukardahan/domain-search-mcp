@@ -121,7 +121,13 @@ async function applyAftermarketFallback(result: DomainResult): Promise<void> {
     return;
   }
 
-  const sedoListing = await lookupSedoAuction(result.domain);
+  // Run Sedo and NS lookups in parallel for better performance
+  const [sedoListing, nsListing] = await Promise.all([
+    lookupSedoAuction(result.domain),
+    lookupAftermarketByNameserver(result.domain),
+  ]);
+
+  // Prefer Sedo (has pricing), then NS-based hints
   if (sedoListing) {
     result.aftermarket = {
       type: 'auction',
@@ -134,7 +140,6 @@ async function applyAftermarketFallback(result: DomainResult): Promise<void> {
     return;
   }
 
-  const nsListing = await lookupAftermarketByNameserver(result.domain);
   if (nsListing) {
     result.aftermarket = nsListing;
     return;

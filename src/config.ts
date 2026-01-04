@@ -190,7 +190,7 @@ export function loadConfig(): Config {
       timeoutMs: parseIntWithDefault(env.PRICING_API_TIMEOUT_MS, 2500),
       maxQuotesPerSearch: parseIntWithDefault(env.PRICING_API_MAX_QUOTES_SEARCH, 0),
       maxQuotesPerBulk: parseIntWithDefault(env.PRICING_API_MAX_QUOTES_BULK, 0),
-      concurrency: parseIntWithDefault(env.PRICING_API_CONCURRENCY, 4),
+      concurrency: parseIntWithDefault(env.PRICING_API_CONCURRENCY, 8),
       token: env.PRICING_API_TOKEN,
     },
     qwenInference: {

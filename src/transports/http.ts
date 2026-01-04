@@ -21,6 +21,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { TransportConfig } from './index.js';
 import { generateOpenAPISpec } from '../openapi/generator.js';
 import { createApiRouter } from '../api/routes.js';
+import { getMetricsSummary } from '../utils/metrics.js';
 
 /**
  * Creates an Express server with MCP HTTP transport.
@@ -180,6 +181,33 @@ export function createHttpTransport(
   });
 
   /**
+   * Metrics endpoint for observability.
+   *
+   * Returns latency histograms (with percentiles), counters, and cache hit rates.
+   * Useful for monitoring performance and debugging.
+   */
+  app.get('/metrics', (_req: Request, res: Response) => {
+    try {
+      const metrics = getMetricsSummary();
+      res.json({
+        ...metrics,
+        active_sessions: transports.size,
+        memory: {
+          heap_used_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+          heap_total_mb: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+          rss_mb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        },
+      });
+    } catch (error) {
+      console.error('[Metrics] Failed to collect:', error);
+      res.status(500).json({
+        error: 'Failed to collect metrics',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
+  /**
    * OpenAPI specification endpoint
    * Used by ChatGPT Actions and other REST API clients
    */
@@ -211,7 +239,8 @@ export function createHttpTransport(
       endpoints: {
         mcp: '/mcp',
         openapi: '/openapi.json',
-        health: '/health'
+        health: '/health',
+        metrics: '/metrics'
       },
       docs: 'https://github.com/dorukardahan/domain-search-mcp'
     });

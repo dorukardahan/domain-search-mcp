@@ -33,7 +33,7 @@ const WHOIS_SERVERS: Record<string, string> = {
   sh: 'whois.nic.sh',
 };
 
-const WHOIS_TIMEOUT_MS = 5000;
+const WHOIS_TIMEOUT_MS = parseInt(process.env.WHOIS_TIMEOUT_MS || '2000', 10);
 const WHOIS_GLOBAL_CONCURRENCY = 2;
 const WHOIS_HOST_CONCURRENCY = 1;
 const whoisGlobalLimiter = new ConcurrencyLimiter(WHOIS_GLOBAL_CONCURRENCY);
