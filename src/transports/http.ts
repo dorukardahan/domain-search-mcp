@@ -13,6 +13,7 @@
 
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -54,6 +55,24 @@ export function createHttpTransport(
     credentials: true
   };
   app.use(cors(corsOptions));
+
+  // Rate limiting - 100 requests per minute per IP
+  const limiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 100, // 100 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      error: 'Too many requests',
+      message: 'Rate limit exceeded. Please try again later.',
+      retryAfter: 60
+    },
+    skip: (req) => {
+      // Skip rate limiting for health checks
+      return req.path === '/health';
+    }
+  });
+  app.use(limiter);
 
   // Store active transports by session ID
   const transports = new Map<string, StreamableHTTPServerTransport>();
