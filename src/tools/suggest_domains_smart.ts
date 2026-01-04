@@ -27,10 +27,7 @@ import {
   getTogetherClient,
   isTogetherConfigured,
 } from '../services/together-inference.js';
-import {
-  getOpenRouterClient,
-  isOpenRouterConfigured,
-} from '../services/openrouter-inference.js';
+import { checkRateLimit, inferenceRateLimiter } from '../utils/rate-limiter.js';
 
 /**
  * Premium price thresholds by TLD (first year price in USD).
@@ -89,6 +86,7 @@ export const suggestDomainsSmartSchema = z.object({
       "'short' (minimal length), 'creative' (playful combinations)."
     ),
   max_suggestions: z
+    .coerce
     .number()
     .int()
     .min(1)
@@ -129,7 +127,7 @@ Generate creative, brandable domain names from keywords or business descriptions
 Combines multiple intelligent sources for maximum coverage and quality.
 
 Features:
-- Multi-source suggestions: Fine-tuned Qwen 7B-DPO (PRIMARY) + OpenRouter 72B (fallback) + Semantic engine
+- ZERO-CONFIG: Works out of the box with our fine-tuned Qwen 7B-DPO model
 - Domain-specialized fine-tuned model for higher quality suggestions
 - Understands natural language queries ("coffee shop in seattle")
 - Auto-detects industry for contextual suggestions
@@ -137,7 +135,7 @@ Features:
 - Applies modern naming patterns (ly, ify, io, hub, etc.)
 - Filters premium domains by default
 - Availability verified via Porkbun/RDAP
-- Graceful fallback: Fine-tuned Qwen → OpenRouter → Semantic engine
+- Graceful fallback: Fine-tuned Qwen → Semantic engine
 
 Examples:
 - suggest_domains_smart("ai customer service") → AI-themed suggestions
@@ -246,7 +244,7 @@ interface SmartSuggestion {
   privacy_included: boolean;
   score: number;
   category: 'standard' | 'premium' | 'auction' | 'unavailable';
-  source: 'qwen_inference' | 'openrouter' | 'together_ai' | 'semantic_engine';
+  source: 'qwen_inference' | 'together_ai' | 'semantic_engine';
 }
 
 /**
@@ -260,7 +258,6 @@ interface SuggestDomainsSmartResponse {
   style: string;
   sources: {
     qwen_inference: number;
-    openrouter: number;
     together_ai: number;
     semantic_engine: number;
   };
@@ -301,7 +298,6 @@ export async function executeSuggestDomainsSmart(
     // Track source statistics
     const sourceStats = {
       qwen_inference: 0,
-      openrouter: 0,
       together_ai: 0,
       semantic_engine: 0,
     };
@@ -310,16 +306,19 @@ export async function executeSuggestDomainsSmart(
     // STEP 1: Generate suggestions from ALL sources in parallel
     // ========================================
 
-    // AI Source Priority (January 2026 - Post DPO Training):
-    // 1. PRIMARY: Local fine-tuned Qwen 7B-DPO (llama-server:8000) - FREE, domain-specialized
-    // 2. FALLBACK 1: OpenRouter Qwen 72B - $0.12/1M tokens (10x cheaper than Together.ai)
-    // 3. FALLBACK 2: Together.ai (deprecated BYOK) - $1.20/1M tokens
-    // 4. ALWAYS: Semantic engine (rule-based, offline)
+    // AI Source Priority (January 2026 - Zero-Config Design):
+    // 1. PRIMARY: VPS fine-tuned Qwen 7B-DPO (llama-server:8000) - FREE, domain-specialized
+    // 2. FALLBACK: Together.ai (deprecated BYOK) - only if user configured
+    // 3. ALWAYS: Semantic engine (rule-based, offline)
+
+    // P3 FIX: Rate limit AI inference calls
+    checkRateLimit(inferenceRateLimiter, 'suggest_domains_smart', 'AI domain suggestions');
 
     let aiSuggestions: Array<{ name: string; tld: string; reason?: string }> = [];
-    let aiSource: 'qwen_inference' | 'openrouter' | 'together_ai' | null = null;
+    let aiSource: 'qwen_inference' | 'together_ai' | null = null;
 
-    // PRIMARY: Local fine-tuned Qwen 7B-DPO (domain-specialized model)
+    // PRIMARY: VPS fine-tuned Qwen 7B-DPO (domain-specialized model)
+    // This is the default - works without any user configuration!
     const qwenClient = getQwenClient();
     if (qwenClient) {
       try {
@@ -336,50 +335,19 @@ export async function executeSuggestDomainsSmart(
           aiSuggestions = qwenResults;
           aiSource = 'qwen_inference';
           sourceStats.qwen_inference = qwenResults.length;
-          logger.debug('Local fine-tuned Qwen 7B-DPO suggestions received (PRIMARY)', {
+          logger.debug('VPS fine-tuned Qwen 7B-DPO suggestions received (PRIMARY)', {
             count: qwenResults.length,
             sample: qwenResults.slice(0, 3).map(s => s.name),
           });
         }
       } catch (error) {
-        logger.warn('Local Qwen failed, trying OpenRouter fallback', {
+        logger.warn('VPS Qwen failed, trying Together.ai fallback', {
           error: error instanceof Error ? error.message : 'unknown',
         });
       }
     }
 
-    // FALLBACK 1: OpenRouter Qwen 72B (10x cheaper than Together.ai)
-    if (aiSuggestions.length === 0 && isOpenRouterConfigured()) {
-      try {
-        const openRouterClient = getOpenRouterClient();
-        if (openRouterClient) {
-          const openRouterResults = await openRouterClient.suggest({
-            query: normalizedQuery,
-            style,
-            tld,
-            max_suggestions: max_suggestions * 2,
-            temperature: style === 'creative' ? 0.9 : 0.7,
-            context: qwenContext,
-          });
-
-          if (openRouterResults && openRouterResults.length > 0) {
-            aiSuggestions = openRouterResults;
-            aiSource = 'openrouter';
-            sourceStats.openrouter = openRouterResults.length;
-            logger.debug('OpenRouter Qwen 72B suggestions received (FALLBACK)', {
-              count: openRouterResults.length,
-              sample: openRouterResults.slice(0, 3).map(s => s.name),
-            });
-          }
-        }
-      } catch (error) {
-        logger.warn('OpenRouter failed, trying Together.ai fallback', {
-          error: error instanceof Error ? error.message : 'unknown',
-        });
-      }
-    }
-
-    // FALLBACK 2: Together.ai (deprecated BYOK - for backward compatibility)
+    // FALLBACK: Together.ai (deprecated BYOK - for users who configured it)
     if (aiSuggestions.length === 0 && isTogetherConfigured()) {
       try {
         const togetherClient = getTogetherClient();
@@ -425,9 +393,9 @@ export async function executeSuggestDomainsSmart(
     // ========================================
 
     // Track which domains came from which source
-    const domainSources = new Map<string, 'qwen_inference' | 'openrouter' | 'together_ai' | 'semantic_engine'>();
+    const domainSources = new Map<string, 'qwen_inference' | 'together_ai' | 'semantic_engine'>();
 
-    // Add AI suggestions first (highest priority - fine-tuned Qwen → OpenRouter → Together.ai)
+    // Add AI suggestions first (highest priority - VPS Qwen → Together.ai)
     for (const ais of aiSuggestions) {
       const fullDomain = `${ais.name}.${ais.tld}`.toLowerCase();
       domainSources.set(fullDomain, aiSource || 'semantic_engine');
@@ -554,11 +522,9 @@ export async function executeSuggestDomainsSmart(
 
     // Source info - AI provider attribution
     if (sourceStats.qwen_inference > 0) {
-      insights.push(`🤖 ${sourceStats.qwen_inference} AI suggestions from fine-tuned Qwen 7B-DPO (PRIMARY)`);
-    } else if (sourceStats.openrouter > 0) {
-      insights.push(`🤖 ${sourceStats.openrouter} AI suggestions from OpenRouter Qwen 72B (fallback)`);
+      insights.push(`🤖 ${sourceStats.qwen_inference} AI suggestions from fine-tuned Qwen 7B-DPO`);
     } else if (sourceStats.together_ai > 0) {
-      insights.push(`🤖 ${sourceStats.together_ai} AI suggestions from Together.ai (deprecated BYOK)`);
+      insights.push(`🤖 ${sourceStats.together_ai} AI suggestions from Together.ai`);
     }
     insights.push(`🔍 Semantic Engine generated ${sourceStats.semantic_engine} suggestions`);
 

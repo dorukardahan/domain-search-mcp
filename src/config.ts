@@ -56,14 +56,19 @@ function parseOutputFormat(
  * SECURITY: Validate external URLs to prevent SSRF attacks.
  *
  * Blocks:
- * - localhost and loopback addresses
+ * - localhost and loopback addresses (except for QWEN_INFERENCE_ENDPOINT)
  * - Private network ranges (10.x, 172.16-31.x, 192.168.x)
  * - Link-local addresses (169.254.x)
  * - File URLs and other non-HTTP schemes
+ * - HTTP URLs (HTTPS required for security, except trusted endpoints)
  *
- * Only allows HTTPS URLs to external hosts.
+ * @param url - URL to validate
+ * @param allowLocalhost - Allow localhost (for inference endpoints only)
  */
-function validateExternalUrl(url: string | undefined): string | undefined {
+function validateExternalUrl(
+  url: string | undefined,
+  allowLocalhost: boolean = false,
+): string | undefined {
   if (!url) return undefined;
 
   try {
@@ -74,10 +79,29 @@ function validateExternalUrl(url: string | undefined): string | undefined {
       return undefined;
     }
 
-    // Block internal/private addresses
     const hostname = parsed.hostname.toLowerCase();
-    const forbiddenHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'];
-    if (forbiddenHosts.includes(hostname)) {
+
+    // P1 FIX: Block suspicious hostname patterns (DNS rebinding mitigation)
+    // Hostnames that look like they might resolve to internal IPs
+    const suspiciousPatterns = [
+      /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\./, // IP-like prefix
+      /\.internal$/i,
+      /\.local$/i,
+      /\.localhost$/i,
+      /\.corp$/i,
+      /\.home$/i,
+      /\.lan$/i,
+    ];
+
+    for (const pattern of suspiciousPatterns) {
+      if (pattern.test(hostname)) {
+        return undefined;
+      }
+    }
+
+    // Block internal/private addresses
+    const forbiddenHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '::1'];
+    if (forbiddenHosts.includes(hostname) && !allowLocalhost) {
       return undefined;
     }
 
@@ -89,10 +113,24 @@ function validateExternalUrl(url: string | undefined): string | undefined {
       /^169\.254\./,                     // Link-local
       /^fc00:/i,                         // IPv6 unique local
       /^fe80:/i,                         // IPv6 link-local
+      /^fd[0-9a-f]{2}:/i,               // IPv6 unique local (fd00::/8)
     ];
 
     for (const range of privateRanges) {
       if (range.test(hostname)) {
+        return undefined;
+      }
+    }
+
+    // P2 FIX: Require HTTPS for external URLs (except localhost for dev)
+    const isLocalhost = forbiddenHosts.includes(hostname);
+    if (parsed.protocol === 'http:' && !isLocalhost) {
+      // Allow HTTP only for known safe external endpoints
+      // Our VPS uses HTTP internally but is accessed via IP
+      const allowedHttpHosts = [
+        '95.111.240.197', // Our inference VPS
+      ];
+      if (!allowedHttpHosts.includes(hostname)) {
         return undefined;
       }
     }
@@ -116,15 +154,19 @@ export function loadConfig(): Config {
 
   // SECURITY: Validate external URLs to prevent SSRF
   const pricingApiUrl = validateExternalUrl(env.PRICING_API_BASE_URL);
-  const qwenEndpoint = validateExternalUrl(env.QWEN_INFERENCE_ENDPOINT);
+
+  // Qwen inference endpoint - allow localhost for local testing
+  // Default to our public VPS for zero-config experience
+  const DEFAULT_QWEN_ENDPOINT = 'http://95.111.240.197:8000';
+  const userQwenEndpoint = env.QWEN_INFERENCE_ENDPOINT;
+  const qwenEndpoint = userQwenEndpoint
+    ? validateExternalUrl(userQwenEndpoint, true) // allowLocalhost=true for user override
+    : DEFAULT_QWEN_ENDPOINT; // Our VPS is always allowed
   const hasPricingApi = !!pricingApiUrl;
   const hasQwen = !!qwenEndpoint;
 
-  // Together.ai cloud inference (deprecated - use OpenRouter instead)
+  // Together.ai cloud inference (deprecated - kept for backward compatibility)
   const hasTogetherAi = !!env.TOGETHER_API_KEY;
-
-  // OpenRouter cloud inference (FALLBACK - 10x cheaper than Together.ai)
-  const hasOpenRouter = !!env.OPENROUTER_API_KEY;
 
   // SECURITY: Validate negative cache URL to prevent SSRF
   const negativeCacheUrl = validateExternalUrl(env.NEGATIVE_CACHE_URL);
@@ -165,15 +207,7 @@ export function loadConfig(): Config {
       maxRetries: parseIntWithDefault(env.TOGETHER_MAX_RETRIES, 2),
       defaultModel: env.TOGETHER_DEFAULT_MODEL || 'qwen3-14b-instruct',
     },
-    openRouter: {
-      apiKey: env.OPENROUTER_API_KEY,
-      enabled: hasOpenRouter,
-      timeoutMs: parseIntWithDefault(env.OPENROUTER_TIMEOUT_MS, 30000),
-      maxRetries: parseIntWithDefault(env.OPENROUTER_MAX_RETRIES, 2),
-      defaultModel: env.OPENROUTER_DEFAULT_MODEL || 'qwen2.5-72b',
-      siteUrl: env.OPENROUTER_SITE_URL,
-      siteName: env.OPENROUTER_SITE_NAME || 'domain-search-mcp',
-    },
+    // OpenRouter removed - using our VPS for zero-config AI suggestions
     logLevel: (env.LOG_LEVEL as Config['logLevel']) || 'info',
     cache: {
       availabilityTtl: parseIntWithDefault(env.CACHE_TTL_AVAILABILITY, 60),
@@ -248,9 +282,8 @@ export function hasRegistrarApi(): boolean {
 export function getAvailableSources(): string[] {
   const sources: string[] = [];
   if (config.negativeCache.enabled) sources.push('negative_cache');
-  if (config.qwenInference?.enabled) sources.push('qwen_inference'); // PRIMARY: Local fine-tuned model
-  if (config.openRouter?.enabled) sources.push('openrouter'); // FALLBACK: Cloud AI (10x cheaper)
-  if (config.togetherAi?.enabled) sources.push('together_ai'); // Deprecated
+  if (config.qwenInference?.enabled) sources.push('qwen_inference'); // AI suggestions (VPS default)
+  if (config.togetherAi?.enabled) sources.push('together_ai'); // Deprecated BYOK
   if (config.pricingApi.enabled) sources.push('pricing_api');
   if (config.porkbun.enabled) sources.push('porkbun');
   if (config.namecheap.enabled) sources.push('namecheap');

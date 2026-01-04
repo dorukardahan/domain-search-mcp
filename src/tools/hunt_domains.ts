@@ -29,6 +29,7 @@ export const huntDomainsSchema = z.object({
     .default(['com', 'io', 'co'])
     .describe("TLDs to search. Defaults to ['com', 'io', 'co']."),
   min_length: z
+    .coerce
     .number()
     .int()
     .min(2)
@@ -37,6 +38,7 @@ export const huntDomainsSchema = z.object({
     .default(3)
     .describe("Minimum domain name length (2-10). Defaults to 3."),
   max_length: z
+    .coerce
     .number()
     .int()
     .min(3)
@@ -50,6 +52,7 @@ export const huntDomainsSchema = z.object({
     .default(true)
     .describe("Include Sedo auction listings. Defaults to true."),
   max_aftermarket_price: z
+    .coerce
     .number()
     .min(1)
     .optional()
@@ -64,6 +67,7 @@ export const huntDomainsSchema = z.object({
       "Defaults to ['short', 'brandable']."
     ),
   max_results: z
+    .coerce
     .number()
     .int()
     .min(1)
@@ -72,6 +76,7 @@ export const huntDomainsSchema = z.object({
     .default(20)
     .describe("Maximum results to return (1-50). Defaults to 20."),
   score_threshold: z
+    .coerce
     .number()
     .int()
     .min(0)

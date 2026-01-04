@@ -46,6 +46,7 @@ export const analyzeProjectSchema = z.object({
     .default('com')
     .describe("Primary TLD for suggestions. Defaults to 'com'."),
   max_suggestions: z
+    .coerce
     .number()
     .int()
     .min(1)

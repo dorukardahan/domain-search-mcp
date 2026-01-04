@@ -23,10 +23,14 @@ interface LogEntry {
  * These will be masked in log output.
  */
 const SECRET_PATTERNS = [
+  // P2 FIX: Bearer tokens in Authorization headers
+  /Bearer\s+[^\s"']+/gi,
   // Long alphanumeric strings (likely API keys)
   /\b[a-zA-Z0-9]{32,}\b/g,
   // Patterns that look like secrets
   /(?:api[_-]?key|secret|password|token)[\s:="']+[^\s"']+/gi,
+  // Common API key prefixes
+  /\b(?:sk|pk|api|key|secret|token)[_-][a-zA-Z0-9]{16,}\b/gi,
 ];
 
 /**

@@ -31,6 +31,7 @@ export const suggestDomainsSchema = z.object({
       "Types of variations to generate. Defaults to all types.",
     ),
   max_suggestions: z
+    .coerce
     .number()
     .int()
     .min(1)

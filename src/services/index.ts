@@ -23,10 +23,4 @@ export {
   TOGETHER_MODELS,
 } from './together-inference.js';
 
-export {
-  getOpenRouterClient,
-  isOpenRouterConfigured,
-  OpenRouterInferenceClient,
-  type OpenRouterSuggestOptions,
-  OPENROUTER_MODELS,
-} from './openrouter-inference.js';
+// OpenRouter removed - using VPS inference for zero-config experience

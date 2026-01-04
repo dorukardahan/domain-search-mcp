@@ -277,7 +277,7 @@ export interface Config {
     maxRetries: number;
   };
 
-  // Together.ai inference (deprecated - use OpenRouter instead)
+  // Together.ai inference (deprecated - kept for backward compatibility)
   togetherAi?: {
     apiKey?: string;
     enabled: boolean;
@@ -287,20 +287,7 @@ export interface Config {
     defaultModel?: string;
   };
 
-  // OpenRouter inference (FALLBACK cloud AI - 10x cheaper than Together.ai)
-  // PRIMARY is local fine-tuned model via qwenInference
-  openRouter?: {
-    apiKey?: string;
-    enabled: boolean;
-    timeoutMs: number;
-    maxRetries: number;
-    /** Default model (e.g., 'qwen2.5-72b', 'qwen2.5-7b') */
-    defaultModel?: string;
-    /** Site URL for OpenRouter analytics */
-    siteUrl?: string;
-    /** Site name for OpenRouter analytics */
-    siteName?: string;
-  };
+  // OpenRouter removed - using VPS inference for zero-config experience
 
   // Logging
   logLevel: 'debug' | 'info' | 'warn' | 'error';

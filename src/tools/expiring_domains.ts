@@ -20,6 +20,7 @@ export const expiringDomainsSchema = z.object({
     .optional()
     .describe("Filter by TLDs (e.g., ['com', 'io']). Omit to search all TLDs."),
   days: z
+    .coerce
     .number()
     .int()
     .min(1)
@@ -28,6 +29,7 @@ export const expiringDomainsSchema = z.object({
     .default(30)
     .describe("Find domains expiring within this many days. Defaults to 30."),
   limit: z
+    .coerce
     .number()
     .int()
     .min(1)
