@@ -209,11 +209,6 @@ flowchart TD
     FALLBACK --> RESULT
 
     RESULT["DomainResult<br/>{status, price, source, aftermarket}"]
-
-    style RDAP fill:#90EE90
-    style PRICING fill:#87CEEB
-    style FALLBACK fill:#FFE4B5
-    style AFTERMARKET fill:#DDA0DD
 ```
 
 **Source Priority:**
@@ -251,11 +246,6 @@ flowchart TB
             LLAMA_SERVICE["llama-server.service<br/>Qwen 7B DPO<br/>Port 8000<br/>(AI Inference)"]
         end
     end
-
-    style NGINX fill:#90EE90
-    style MCP_SERVICE fill:#87CEEB
-    style CACHE_SERVICE fill:#FFE4B5
-    style LLAMA_SERVICE fill:#DDA0DD
 ```
 
 **Service Configuration:**
