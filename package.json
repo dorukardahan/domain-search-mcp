@@ -1,6 +1,6 @@
 {
   "name": "domain-search-mcp",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "mcpName": "io.github.dorukardahan/domain-search-mcp",
   "description": "Zero-config domain search MCP with AI-powered suggestions. RDAP/WHOIS availability, backend pricing (Porkbun), and fine-tuned Qwen 7B for smart domain name generation.",
   "main": "dist/server.js",

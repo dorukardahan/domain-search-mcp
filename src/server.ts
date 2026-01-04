@@ -60,7 +60,8 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SERVER_NAME = 'domain-search-mcp';
-const SERVER_VERSION = '1.5.0';
+// NOTE: Keep in sync with package.json version
+const SERVER_VERSION = '1.8.1';
 
 /**
  * All available tools.
