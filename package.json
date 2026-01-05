@@ -1,6 +1,6 @@
 {
   "name": "domain-search-mcp",
-  "version": "1.9.5",
+  "version": "1.9.6",
   "mcpName": "io.github.dorukardahan/domain-search-mcp",
   "description": "Zero-config domain search MCP with AI-powered suggestions. Supports stdio and HTTP transports (ChatGPT Actions compatible). RDAP/WHOIS availability, backend pricing, and fine-tuned Qwen 7B.",
   "main": "dist/server.js",
@@ -60,6 +60,7 @@
     "dotenv": "^16.3.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
+    "ioredis": "^5.8.2",
     "zod": "^3.22.0"
   },
   "devDependencies": {

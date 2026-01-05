@@ -213,6 +213,7 @@ export function loadConfig(): Config {
       availabilityTtl: parseIntWithDefault(env.CACHE_TTL_AVAILABILITY, 60),
       pricingTtl: parseIntWithDefault(env.CACHE_TTL_PRICING, 3600),
       sedoTtl: parseIntWithDefault(env.CACHE_TTL_SEDO, 3600),
+      redisUrl: env.REDIS_URL, // Optional: redis://[:password@]host:port
     },
     rateLimitPerMinute: parseIntWithDefault(env.RATE_LIMIT_PER_MINUTE, 60),
     allowedTlds: parseList(env.ALLOWED_TLDS, [

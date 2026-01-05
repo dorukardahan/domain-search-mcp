@@ -297,6 +297,8 @@ export interface Config {
     availabilityTtl: number;
     pricingTtl: number;
     sedoTtl: number;
+    /** Optional Redis URL for distributed caching (redis://[:password@]host:port) */
+    redisUrl?: string;
   };
 
   // Rate limiting

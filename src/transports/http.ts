@@ -24,6 +24,7 @@ import { createApiRouter } from '../api/routes.js';
 import { getMetricsSummary } from '../utils/metrics.js';
 import { getAllCircuitStates } from '../utils/circuit-breaker.js';
 import { getAllAdaptiveStates } from '../utils/adaptive-concurrency.js';
+import { getDefaultHybridCache } from '../utils/redis-cache.js';
 
 /**
  * Creates an Express server with MCP HTTP transport.
@@ -191,10 +192,12 @@ export function createHttpTransport(
   app.get('/metrics', (_req: Request, res: Response) => {
     try {
       const metrics = getMetricsSummary();
+      const hybridCache = getDefaultHybridCache();
       res.json({
         ...metrics,
         circuit_breakers: getAllCircuitStates(),
         adaptive_limiters: getAllAdaptiveStates(),
+        redis_cache: hybridCache.getStats(),
         active_sessions: transports.size,
         memory: {
           heap_used_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
