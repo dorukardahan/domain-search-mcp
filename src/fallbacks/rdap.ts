@@ -14,6 +14,7 @@ import { TimeoutError, RegistrarApiError } from '../utils/errors.js';
 import { TtlCache } from '../utils/cache.js';
 import { KeyedLimiter } from '../utils/concurrency.js';
 import { AdaptiveConcurrencyLimiter } from '../utils/adaptive-concurrency.js';
+import { checkWhois } from './whois.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Zod Schemas for RDAP Response Validation (RFC 7483)
@@ -70,6 +71,20 @@ const RDAP_TIMEOUT_MS = 800;
 const RDAP_ERROR_TTL_MS = 10_000;
 const RDAP_GLOBAL_CONCURRENCY = 30;
 const RDAP_HOST_CONCURRENCY = 2;
+
+/**
+ * TLDs where RDAP 404 responses are UNRELIABLE.
+ *
+ * For these TLDs, RDAP may return 404 for premium/reserved domains
+ * that are actually registered. We use WHOIS as secondary verification.
+ *
+ * Known issues:
+ * - .ai: Premium domains return 404 from RDAP but are registered
+ * - .io: Some reserved domains show as 404
+ * - .sh: Shares infrastructure with .ai/.io, same issue
+ * - .ac: Same registry as .ai/.io/.sh
+ */
+const UNRELIABLE_RDAP_TLDS = new Set(['ai', 'io', 'sh', 'ac']);
 
 /**
  * Fallback RDAP servers for common TLDs.
@@ -348,8 +363,34 @@ export async function checkRdap(
       ),
     );
 
-    // 404 = domain not found = available
+    // 404 = domain not found = potentially available
     if (response.status === 404) {
+      // For unreliable TLDs (e.g., .ai), verify with WHOIS before confirming
+      // RDAP returns 404 for premium/reserved domains that are actually registered
+      if (UNRELIABLE_RDAP_TLDS.has(tld)) {
+        logger.debug('RDAP 404 for unreliable TLD, verifying with WHOIS', {
+          domain: fullDomain,
+          tld,
+        });
+        try {
+          const whoisResult = await checkWhois(domain, tld);
+          if (!whoisResult.available) {
+            logger.debug('RDAP false positive detected - WHOIS says registered', {
+              domain: fullDomain,
+            });
+            return whoisResult; // Domain is actually taken
+          }
+          // Both RDAP and WHOIS agree - domain is available
+          logger.debug('WHOIS confirmed availability', { domain: fullDomain });
+        } catch (error) {
+          // WHOIS failed - default to NOT available (fail-safe)
+          logger.warn('WHOIS verification failed for unreliable TLD, assuming not available', {
+            domain: fullDomain,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return createRdapResult(domain, tld, false);
+        }
+      }
       return createRdapResult(domain, tld, true);
     }
 
@@ -375,8 +416,19 @@ export async function checkRdap(
         throw new TimeoutError('RDAP lookup', RDAP_TIMEOUT_MS);
       }
 
-      // 404 = available
+      // 404 = potentially available (same logic as above)
       if (axiosError.response?.status === 404) {
+        if (UNRELIABLE_RDAP_TLDS.has(tld)) {
+          try {
+            const whoisResult = await checkWhois(domain, tld);
+            if (!whoisResult.available) {
+              return whoisResult; // Domain is actually taken
+            }
+          } catch {
+            // WHOIS failed - default to NOT available (fail-safe)
+            return createRdapResult(domain, tld, false);
+          }
+        }
         return createRdapResult(domain, tld, true);
       }
 

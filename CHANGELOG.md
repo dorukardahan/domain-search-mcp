@@ -9,6 +9,16 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 - -
 
+## [1.9.8] - 2026-01-05
+### Fixed
+- **CRITICAL**: Fixed false positives for .ai TLD (domains reported as "available" when actually registered)
+- Added WHOIS cross-verification for unreliable RDAP TLDs (.ai, .io, .sh, .ac)
+- Implemented native TCP WHOIS lookup for accurate .ai/.io/.sh/.ac domain status
+
+### Changed
+- RDAP 404 responses for .ai/.io/.sh/.ac now trigger WHOIS verification
+- WHOIS module now uses native TCP (port 43) for TLDs with unreliable web APIs
+
 ## [1.9.6] - 2026-01-05
 ### Added
 - Hybrid Redis + in-memory cache for horizontal scaling
@@ -162,7 +172,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Changed
 - Removed Dynadot backend usage due to ToS restrictions.
 
-[Unreleased]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.9.6...HEAD
+[Unreleased]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.9.8...HEAD
+[1.9.8]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.9.6...v1.9.8
 [1.9.6]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.9.5...v1.9.6
 [1.9.5]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.9.4...v1.9.5
 [1.9.4]: https://github.com/dorukardahan/domain-search-mcp/compare/v1.9.3...v1.9.4

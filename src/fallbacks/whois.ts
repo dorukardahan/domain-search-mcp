@@ -10,6 +10,7 @@
  */
 
 import axios, { type AxiosError } from 'axios';
+import * as net from 'net';
 import type { DomainResult } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { TimeoutError, RegistrarApiError } from '../utils/errors.js';
@@ -31,7 +32,18 @@ const WHOIS_SERVERS: Record<string, string> = {
   cc: 'ccwhois.verisign-grs.com',
   xyz: 'whois.nic.xyz',
   sh: 'whois.nic.sh',
+  ac: 'whois.nic.ac',
 };
+
+/**
+ * TLDs where web-based WHOIS APIs are UNRELIABLE.
+ * For these TLDs, we use native TCP WHOIS instead.
+ *
+ * Known issues:
+ * - .ai: who.is and whoisjson.com return "not found" for registered domains
+ * - .io/.sh/.ac: Same registry, same issue
+ */
+const NATIVE_WHOIS_REQUIRED_TLDS = new Set(['ai', 'io', 'sh', 'ac']);
 
 const WHOIS_TIMEOUT_MS = parseInt(process.env.WHOIS_TIMEOUT_MS || '2000', 10);
 const WHOIS_GLOBAL_CONCURRENCY = 2;
@@ -198,10 +210,84 @@ function parseWhoisResponse(response: string): WhoisParseResult {
 }
 
 /**
- * Check domain availability using a public WHOIS API.
+ * Native TCP WHOIS lookup for TLDs with unreliable web APIs.
  *
- * We use a web-based WHOIS lookup to avoid TCP connection issues.
- * This is more reliable across different environments.
+ * Connects directly to the authoritative WHOIS server (port 43).
+ * More reliable than web APIs for TLDs like .ai, .io, .sh, .ac.
+ */
+async function nativeTcpWhoisLookup(
+  domain: string,
+  whoisServer: string,
+  timeoutMs: number = WHOIS_TIMEOUT_MS,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = new net.Socket();
+    let response = '';
+
+    // Set timeout
+    socket.setTimeout(timeoutMs);
+
+    socket.on('connect', () => {
+      // WHOIS protocol: send domain name followed by CRLF
+      socket.write(`${domain}\r\n`);
+    });
+
+    socket.on('data', (data: Buffer) => {
+      response += data.toString('utf-8');
+    });
+
+    socket.on('end', () => {
+      resolve(response);
+    });
+
+    socket.on('error', (err: Error) => {
+      reject(new Error(`WHOIS TCP error: ${err.message}`));
+    });
+
+    socket.on('timeout', () => {
+      socket.destroy();
+      reject(new Error('WHOIS TCP timeout'));
+    });
+
+    // Connect to WHOIS server on port 43
+    socket.connect(43, whoisServer);
+  });
+}
+
+/**
+ * Check domain availability using native TCP WHOIS.
+ * Used for TLDs with unreliable web APIs (e.g., .ai, .io, .sh, .ac).
+ */
+async function checkNativeWhois(
+  domain: string,
+  tld: string,
+): Promise<WhoisParseResult> {
+  const fullDomain = `${domain}.${tld}`;
+  const whoisServer = WHOIS_SERVERS[tld];
+
+  if (!whoisServer) {
+    throw new Error(`No WHOIS server configured for .${tld}`);
+  }
+
+  logger.debug('Native WHOIS TCP lookup', { domain: fullDomain, server: whoisServer });
+
+  try {
+    const response = await nativeTcpWhoisLookup(fullDomain, whoisServer);
+    return parseWhoisResponse(response);
+  } catch (error) {
+    logger.debug('Native WHOIS lookup failed', {
+      domain: fullDomain,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+/**
+ * Check domain availability using WHOIS.
+ *
+ * For TLDs with unreliable web APIs (e.g., .ai, .io, .sh, .ac),
+ * we use native TCP WHOIS. For others, we use web-based lookups.
  */
 export async function checkWhois(
   domain: string,
@@ -214,6 +300,20 @@ export async function checkWhois(
 
   return whoisGlobalLimiter.run(() =>
     whoisHostLimiter.run(serverKey, async () => {
+      // For TLDs with unreliable web APIs, use native TCP WHOIS first
+      if (NATIVE_WHOIS_REQUIRED_TLDS.has(tld)) {
+        try {
+          const parseResult = await checkNativeWhois(domain, tld);
+          return createWhoisResult(domain, tld, parseResult);
+        } catch (error) {
+          logger.debug('Native WHOIS failed, falling back to web APIs', {
+            domain: fullDomain,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          // Fall through to web-based lookup
+        }
+      }
+
       // Use a public WHOIS API service
       // There are several options; we'll try a few
       const apis = [
