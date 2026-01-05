@@ -48,8 +48,8 @@ flowchart TB
     NPX --> SERVER
     HTTPS --> SERVER
 
-    subgraph SERVER["Domain Search MCP Server (v1.9.1)"]
-        TOOLS[10 MCP Tools]
+    subgraph SERVER["Domain Search MCP Server (v1.9.6)"]
+        TOOLS[11 MCP Tools]
     end
 ```
 
@@ -103,6 +103,7 @@ flowchart TB
         ROOT["GET /"]
         HEALTH["GET /health"]
         OPENAPI["GET /openapi.json"]
+        METRICS["GET /metrics"]
         MCP["ALL /mcp"]
         API["POST /api/tools/*"]
     end
@@ -110,6 +111,7 @@ flowchart TB
     ROOT --> INFO["Server info JSON"]
     HEALTH --> STATUS["Status, uptime, sessions"]
     OPENAPI --> SPEC["OpenAPI 3.1 Spec<br/>(auto-generated from Zod)"]
+    METRICS["/metrics"] --> PROM["Prometheus metrics<br/>(cache stats, latency)"]
 
     MCP --> MCPCHECK{Method?}
     MCPCHECK -->|POST| MESSAGES["JSON-RPC Messages"]
@@ -138,6 +140,7 @@ flowchart TB
 | GET | `/` | Server info |
 | GET | `/health` | Health check (bypasses rate limit) |
 | GET | `/openapi.json` | OpenAPI 3.1 specification |
+| GET | `/metrics` | Prometheus-compatible metrics |
 | POST | `/mcp` | MCP JSON-RPC messages |
 | GET | `/mcp` | MCP SSE stream |
 | POST | `/api/tools/:name` | REST API for ChatGPT Actions |
@@ -236,14 +239,14 @@ flowchart TB
             NGINX["Reverse Proxy<br/>SSL Termination<br/>Let's Encrypt"]
         end
 
-        NGINX -->|:3001| MCP_SERVICE
-        MCP_SERVICE -->|:3000| CACHE_SERVICE
+        NGINX -->|:3000| MCP_SERVICE
         MCP_SERVICE -.->|:8000| LLAMA_SERVICE
+        MCP_SERVICE -.->|:6379| REDIS_SERVICE
 
         subgraph SERVICES["systemd Services"]
-            MCP_SERVICE["domain-mcp-http.service<br/>/var/www/domain-mcp<br/>Port 3001"]
-            CACHE_SERVICE["domain-cache.service<br/>/var/www/domain-cache<br/>Port 3000<br/>(Porkbun Backend)"]
-            LLAMA_SERVICE["llama-server.service<br/>Qwen 7B DPO<br/>Port 8000<br/>(AI Inference)"]
+            MCP_SERVICE["domain-mcp.service<br/>/var/www/domain-mcp<br/>Port 3000"]
+            LLAMA_SERVICE["qwen-inference.service<br/>Qwen 7B DPO<br/>Port 8000<br/>(AI Inference)"]
+            REDIS_SERVICE["redis-server.service<br/>Port 6379<br/>(Distributed Cache)"]
         end
     end
 ```
@@ -252,9 +255,9 @@ flowchart TB
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| `domain-mcp-http` | 3001 | MCP HTTP server |
-| `domain-cache` | 3000 | Porkbun pricing backend |
-| `llama-server` | 8000 | Qwen 7B AI inference |
+| `domain-mcp` | 3000 | MCP HTTP server |
+| `qwen-inference` | 8000 | Qwen 7B AI inference |
+| `redis-server` | 6379 | Distributed cache |
 
 **Production URLs:**
 
@@ -262,6 +265,7 @@ flowchart TB
 - `https://vmi3000318.contaboserver.net/mcp` - MCP protocol
 - `https://vmi3000318.contaboserver.net/openapi.json` - OpenAPI spec
 - `https://vmi3000318.contaboserver.net/health` - Health check
+- `https://vmi3000318.contaboserver.net/metrics` - Prometheus metrics
 
 ---
 
@@ -373,7 +377,11 @@ domain-search-mcp/
 │   │   └── routes.ts             # REST API router (/api/tools/*)
 │   │
 │   └── utils/
-│       ├── cache.ts              # TTL-based cache
+│       ├── cache.ts              # TTL-based in-memory cache
+│       ├── redis-cache.ts        # Hybrid Redis + in-memory cache
+│       ├── circuit-breaker.ts    # Circuit breaker pattern
+│       ├── adaptive-concurrency.ts # Dynamic batch sizing
+│       ├── metrics.ts            # Prometheus metrics
 │       ├── errors.ts             # Error types
 │       └── validators.ts         # Input validation
 │
@@ -381,7 +389,7 @@ domain-search-mcp/
 │   ├── ARCHITECTURE.md           # This file
 │   └── MULTI_PLATFORM_EXPANSION.md
 │
-└── package.json                  # v1.9.1
+└── package.json                  # v1.9.6
 ```
 
 ---
@@ -397,3 +405,9 @@ domain-search-mcp/
 4. **Rate Limiting Strategy**: Global HTTP rate limiting (100/min) protects against abuse while per-registrar limits protect API quotas.
 
 5. **OpenAPI Auto-generation**: Schemas defined once in Zod, automatically converted to OpenAPI 3.1 for ChatGPT Actions compatibility.
+
+6. **Hybrid Caching**: Redis as primary cache with automatic fallback to in-memory. Circuit breaker pattern prevents Redis failures from affecting availability.
+
+7. **Circuit Breaker Pattern**: All external services (Redis, AI inference) protected by circuit breakers with exponential backoff and automatic recovery.
+
+8. **Adaptive Concurrency**: AI inference dynamically adjusts batch size and parallelism based on response latency percentiles.

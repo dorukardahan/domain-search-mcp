@@ -10,7 +10,7 @@
 
 Fast, local-first domain availability checks for MCP clients. Works with zero configuration using public RDAP/WHOIS, and optionally enriches results with registrar pricing via a backend you control.
 
-**🆕 v1.8.0+**: AI-powered domain suggestions now work out of the box! No API keys needed - `suggest_domains_smart` uses our public fine-tuned Qwen 7B-DPO model.
+**🆕 v1.9.0+**: AI-powered domain suggestions now work out of the box! No API keys needed - `suggest_domains_smart` uses our public fine-tuned Qwen 7B-DPO model. Plus: Redis distributed caching, circuit breakers, and `/metrics` endpoint for observability.
 
 Built on the [Model Context Protocol](https://modelcontextprotocol.io) for Claude, Codex, VS Code, Cursor, Cline, and other MCP-compatible clients.
 
@@ -93,6 +93,7 @@ MCP_PORT=8080 npx -y domain-search-mcp@latest --http
 - `/api/tools/*` - REST API for each tool (ChatGPT Actions compatible)
 - `/openapi.json` - OpenAPI 3.1 specification
 - `/health` - Health check
+- `/metrics` - Prometheus-compatible metrics (cache stats, request counts, AI inference health)
 
 ### ChatGPT Custom GPT Integration
 
@@ -142,13 +143,24 @@ curl -X POST https://your-domain/api/tools/search_domain \
 
 ## Tools
 
+### Core Search
 - `search_domain`: Check a name across multiple TLDs, adds premium/auction signals.
 - `bulk_search`: Check up to 100 names for a single TLD.
 - `compare_registrars`: Compare pricing across registrars (backend when configured).
+
+### AI-Powered Suggestions
 - `suggest_domains`: Generate variations (prefix/suffix/hyphen).
 - `suggest_domains_smart`: **🤖 AI-powered** brandable name generation using fine-tuned Qwen 7B-DPO. Zero-config - works instantly!
+- `analyze_project`: Scan local project or GitHub repo to extract context and suggest matching domain names.
+
+### Domain Investment
+- `hunt_domains`: Find valuable domains for investment - scans Sedo auctions, generates patterns, calculates investment scores.
+- `expiring_domains`: Monitor domains approaching expiration (requires federated negative cache).
+
+### Utilities
 - `tld_info`: TLD metadata and restrictions.
 - `check_socials`: Username availability across platforms.
+- `ai_health`: Check status of AI inference services (VPS Qwen, circuit breakers, adaptive concurrency).
 
 ## Configuration
 
@@ -181,6 +193,29 @@ NAMECHEAP_API_USER=your_username
 NAMECHEAP_CLIENT_IP=your_whitelisted_ip
 ```
 
+### Redis Distributed Cache (Optional)
+
+For horizontal scaling across multiple MCP instances, configure Redis:
+
+```bash
+REDIS_URL=redis://:password@host:6379
+```
+
+Without Redis, the server uses in-memory caching (works fine for single instances). Redis enables:
+- Shared cache across multiple server instances
+- Persistent cache surviving restarts
+- Better cache hit rates in load-balanced deployments
+
+### AI Inference (Zero-Config)
+
+AI-powered suggestions (`suggest_domains_smart`) work out of the box using our public VPS running fine-tuned Qwen 7B-DPO. No API keys needed!
+
+For self-hosted setups, override the endpoint:
+```bash
+QWEN_INFERENCE_ENDPOINT=http://your-server:8000
+QWEN_API_KEY=optional_if_secured
+```
+
 ### Environment Variables
 
 | Variable | Default | Description |
@@ -210,6 +245,10 @@ NAMECHEAP_CLIENT_IP=your_whitelisted_ip
 | `SEDO_FEED_URL` | https://sedo.com/txt/auctions_us.txt | Sedo public feed URL |
 | `AFTERMARKET_NS_ENABLED` | true | Enable nameserver-based aftermarket hints |
 | `AFTERMARKET_NS_TIMEOUT_MS` | 1500 | Nameserver lookup timeout (ms) |
+| `REDIS_URL` | - | Redis connection URL for distributed caching (e.g., `redis://:password@host:6379`) |
+| `QWEN_INFERENCE_ENDPOINT` | (public VPS) | Override AI inference endpoint for self-hosted setups |
+| `QWEN_TIMEOUT_MS` | 15000 | AI inference request timeout |
+| `QWEN_MAX_RETRIES` | 2 | Retry count for AI inference failures |
 
 ### Output Format
 

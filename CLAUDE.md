@@ -62,10 +62,14 @@ fallbacks/*.ts (RDAP, WHOIS)
 **Important**: Backend's Porkbun response overrides RDAP false positives.
 
 **Utilities** (`src/utils/`):
-- `cache.ts`: TTL-based in-memory cache
+- `cache.ts`: TTL-based in-memory cache with type-specific TTLs
+- `redis-cache.ts`: Hybrid Redis + in-memory cache with circuit breaker failover
+- `circuit-breaker.ts`: Circuit breaker pattern for external service resilience
+- `adaptive-concurrency.ts`: Dynamic concurrency/batch sizing based on latency
+- `metrics.ts`: Prometheus-compatible metrics (cache stats, latency histograms)
 - `errors.ts`: Structured error types with retry hints
 - `premium-analyzer.ts`: Domain quality scoring and premium detection
-- `semantic-engine.ts`: AI-powered domain name generation
+- `semantic-engine.ts`: AI-powered domain name generation with keyword expansion
 
 ### Type System
 
