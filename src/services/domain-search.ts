@@ -35,6 +35,7 @@ import { ConcurrencyLimiter } from '../utils/concurrency.js';
 import {
   porkbunAdapter,
   namecheapAdapter,
+  godaddyPublicAdapter,
 } from '../registrars/index.js';
 import { checkRdap, isRdapAvailable } from '../fallbacks/rdap.js';
 import { checkWhois, isWhoisAvailable } from '../fallbacks/whois.js';
@@ -305,6 +306,7 @@ async function searchSingleDomain(
   for (const source of [
     'porkbun_api',
     'namecheap_api',
+    'godaddy_api',
     'rdap',
     'whois',
   ] as const) {
@@ -382,8 +384,15 @@ async function searchSingleDomain(
  * 1. Preferred registrars (if specified)
  * 2. Porkbun (has pricing, best API)
  * 3. Namecheap (has pricing)
- * 4. RDAP (free, no pricing)
- * 5. WHOIS (slowest fallback)
+ * 4. RDAP (free, no pricing, fast)
+ * 5. GoDaddy (free, no pricing, premium/auction detection)
+ * 6. WHOIS (slowest fallback)
+ *
+ * GoDaddy is placed after RDAP because:
+ * - RDAP is faster and has no rate limits
+ * - GoDaddy has conservative rate limits (30/min)
+ * - GoDaddy provides premium/auction detection that RDAP lacks
+ * - If RDAP fails, GoDaddy provides additional data
  */
 function buildSourcePriority(
   tld: string,
@@ -399,6 +408,8 @@ function buildSourcePriority(
         sources.push('porkbun');
       } else if (registrar === 'namecheap' && config.namecheap.enabled) {
         sources.push('namecheap');
+      } else if (registrar === 'godaddy' && godaddyPublicAdapter.isEnabled()) {
+        sources.push('godaddy');
       }
     }
   } else if (allowLocalRegistrars) {
@@ -407,8 +418,13 @@ function buildSourcePriority(
     if (config.namecheap.enabled) sources.push('namecheap');
   }
 
-  // Always add fallbacks
+  // Always add fallbacks in order: RDAP → GoDaddy → WHOIS
   if (isRdapAvailable(tld)) sources.push('rdap');
+
+  // GoDaddy public endpoint - provides premium/auction detection
+  // Placed after RDAP (faster, unlimited) but before WHOIS (slower)
+  if (godaddyPublicAdapter.isEnabled()) sources.push('godaddy');
+
   if (isWhoisAvailable(tld)) sources.push('whois');
 
   return sources;
@@ -428,6 +444,9 @@ async function trySource(
 
     case 'namecheap':
       return namecheapAdapter.search(domain, tld);
+
+    case 'godaddy':
+      return godaddyPublicAdapter.search(domain, tld);
 
     case 'rdap':
       return checkRdap(domain, tld);
