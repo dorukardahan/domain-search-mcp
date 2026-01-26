@@ -10,9 +10,24 @@
 
 Fast, local-first domain availability checks for MCP clients. Works with zero configuration using public RDAP/WHOIS, and optionally enriches results with registrar pricing via a backend you control.
 
-**🆕 v1.9.0+**: AI-powered domain suggestions now work out of the box! No API keys needed - `suggest_domains_smart` uses our public fine-tuned Qwen 7B-DPO model. Plus: Redis distributed caching, circuit breakers, and `/metrics` endpoint for observability.
+**🆕 v1.10.0**: GoDaddy public endpoint integration! Enhanced fallback chain (RDAP → GoDaddy → WHOIS) with premium/auction domain detection. Circuit breaker pattern ensures resilience.
+
+**🤖 v1.9.0+**: AI-powered domain suggestions work out of the box! No API keys needed - `suggest_domains_smart` uses our public fine-tuned Qwen 7B-DPO model. Plus: Redis distributed caching and `/metrics` endpoint for observability.
 
 Built on the [Model Context Protocol](https://modelcontextprotocol.io) for Claude, Codex, VS Code, Cursor, Cline, and other MCP-compatible clients.
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| 🔍 **Multi-TLD Search** | Check one name across .com, .io, .dev, .ai and 500+ TLDs |
+| 📦 **Bulk Check** | Validate up to 100 domain names in a single call |
+| 💎 **Premium Detection** | Identify premium and auction domains via GoDaddy |
+| 🤖 **AI Suggestions** | Generate brandable names with fine-tuned Qwen 7B-DPO |
+| 💰 **Price Comparison** | Compare pricing across Porkbun, Namecheap |
+| 🌐 **Social Handle Check** | Verify username availability on GitHub, Twitter, etc. |
+| 🔌 **Dual Transport** | Works via stdio (Claude) or HTTP/SSE (ChatGPT Actions) |
+| ⚡ **Zero Config** | Works instantly - no API keys required for availability |
 
 ## What It Does
 
@@ -26,11 +41,19 @@ Built on the [Model Context Protocol](https://modelcontextprotocol.io) for Claud
 
 Availability and pricing are intentionally separated:
 
-- Availability (default):
-  - Primary: RDAP
-  - Fallback: WHOIS
-  - GoDaddy public endpoint is used only to add premium/auction signals in `search_domain`
-- Pricing (optional):
+```
+Availability Chain (zero-config):
+┌─────────┐     ┌─────────┐     ┌─────────┐
+│  RDAP   │ ──► │ GoDaddy │ ──► │  WHOIS  │
+│ (fast)  │     │(premium)│     │(fallback│
+└─────────┘     └─────────┘     └─────────┘
+```
+
+- **Availability** (default, no keys needed):
+  - **RDAP**: Primary source - fast, unlimited, public registry data
+  - **GoDaddy**: Secondary - adds premium/auction detection (30 req/min, circuit breaker protected)
+  - **WHOIS**: Last resort fallback for edge cases
+- **Pricing** (optional):
   - Recommended: `PRICING_API_BASE_URL` (backend with Porkbun keys)
   - Optional BYOK: Porkbun/Namecheap only when backend is not configured
 
@@ -261,15 +284,15 @@ OUTPUT_FORMAT=json
 
 ## Data Sources
 
-| Source | Usage | Pricing |
-|--------|-------|---------|
-| Pricing API | Pricing + premium (Porkbun) | Yes (backend) |
-| Porkbun API | Availability + pricing | Yes (with keys) |
-| Namecheap API | Availability + pricing | Yes (with keys) |
-| RDAP | Primary availability | No |
-| WHOIS | Fallback availability | No |
-| GoDaddy public endpoint | Premium/auction signal for `search_domain` | No |
-| Sedo public feed | Aftermarket auction hints | No |
+| Source | Position in Chain | Usage | API Keys |
+|--------|-------------------|-------|----------|
+| **RDAP** | 1st (Primary) | Fast availability check | Not needed |
+| **GoDaddy** | 2nd (Fallback) | Premium/auction detection | Not needed |
+| **WHOIS** | 3rd (Last resort) | Legacy availability | Not needed |
+| Pricing API | Parallel | Live pricing via backend | Backend token |
+| Porkbun API | Parallel (BYOK) | Availability + pricing | API key + secret |
+| Namecheap API | Parallel (BYOK) | Availability + pricing | API key + IP whitelist |
+| Sedo Feed | Enrichment | Aftermarket auction hints | Not needed |
 
 ## Pricing Behavior
 
@@ -277,13 +300,36 @@ OUTPUT_FORMAT=json
 - If live quotes fail or are rate-limited, the result falls back to the catalog estimate and includes `price_note`.
 - Always verify pricing via `price_check_url` before purchase.
 
-## Example (No API Keys)
+## Examples
+
+### Basic Search (No API Keys)
 
 ```
-search_domain("myproject", ["com", "io"])
+search_domain("myproject", ["com", "io", "dev"])
 
-myproject.com - available - price_first_year: null - source: rdap
-myproject.io  - taken     - price_first_year: null - source: rdap
+┌─────────────────┬───────────┬─────────┬────────┐
+│ Domain          │ Available │ Premium │ Source │
+├─────────────────┼───────────┼─────────┼────────┤
+│ myproject.com   │ ✅        │ No      │ rdap   │
+│ myproject.io    │ ❌        │ -       │ rdap   │
+│ myproject.dev   │ ✅        │ Yes     │ godaddy│
+└─────────────────┴───────────┴─────────┴────────┘
+```
+
+### AI-Powered Suggestions
+
+```
+suggest_domains_smart("coffee shop in seattle", { style: "brandable" })
+
+→ seattlebrew.com, pugetperk.io, raincitycoffee.co, cascadiacafe.com
+```
+
+### Bulk Check
+
+```
+bulk_search(["startup", "launch", "begin", "init"], "io")
+
+→ Checks startup.io, launch.io, begin.io, init.io in parallel
 ```
 
 ## Development
@@ -350,12 +396,40 @@ For detailed system architecture diagrams, see [docs/ARCHITECTURE.md](docs/ARCHI
 - AI suggestion flow
 - MCP session lifecycle
 
+## Why This Tool?
+
+| Problem | Solution |
+|---------|----------|
+| Domain APIs require signup/keys | RDAP + GoDaddy = zero-config availability |
+| Premium domains show as "available" | GoDaddy detects premium/auction status |
+| Hard to check multiple TLDs | Single call checks .com, .io, .dev, etc. |
+| No AI integration for naming | Built-in Qwen 7B for brandable suggestions |
+| Only works with Claude | HTTP transport supports ChatGPT, LM Studio |
+
+## FAQ
+
+**Q: Does this work without any API keys?**
+A: Yes! Availability checking uses public RDAP and GoDaddy endpoints. Only pricing requires API keys.
+
+**Q: Which MCP clients are supported?**
+A: Claude Desktop, Claude Code, VS Code, Cursor, Cline (stdio), and ChatGPT, LM Studio (HTTP/SSE).
+
+**Q: How accurate is premium domain detection?**
+A: GoDaddy's public endpoint detects most premium and auction domains. Always verify on registrar checkout.
+
+**Q: Can I self-host the AI suggestions?**
+A: Yes! Set `QWEN_INFERENCE_ENDPOINT` to your llama.cpp server running the fine-tuned model.
+
 ## Links
 
-- MCP Registry: https://registry.modelcontextprotocol.io
-- Glama page: https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp
-- Context7 index: https://context7.com/dorukardahan/domain-search-mcp
-- Architecture: docs/ARCHITECTURE.md
-- API reference: docs/API.md
-- Configuration: docs/CONFIGURATION.md
-- Workflows: docs/WORKFLOWS.md
+- **npm**: [npmjs.com/package/domain-search-mcp](https://www.npmjs.com/package/domain-search-mcp)
+- **MCP Registry**: [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io)
+- **Glama**: [glama.ai/mcp/servers/@dorukardahan/domain-search-mcp](https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp)
+- **Context7**: [context7.com/dorukardahan/domain-search-mcp](https://context7.com/dorukardahan/domain-search-mcp)
+
+### Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
+- [API Reference](docs/API.md) - Tool schemas and responses
+- [Configuration](docs/CONFIGURATION.md) - Environment variables
+- [Workflows](docs/WORKFLOWS.md) - Common usage patterns

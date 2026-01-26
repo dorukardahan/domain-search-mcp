@@ -1,8 +1,8 @@
 {
   "name": "domain-search-mcp",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "mcpName": "io.github.dorukardahan/domain-search-mcp",
-  "description": "Zero-config domain search MCP with AI-powered suggestions. Supports stdio and HTTP transports (ChatGPT Actions compatible). RDAP/WHOIS availability, backend pricing, and fine-tuned Qwen 7B.",
+  "description": "Zero-config domain availability MCP for Claude & ChatGPT. AI-powered suggestions via Qwen 7B. RDAP → GoDaddy → WHOIS fallback chain with premium/auction detection. Stdio + HTTP transports.",
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
   "bin": {
@@ -30,14 +30,21 @@
   "keywords": [
     "mcp",
     "model-context-protocol",
+    "claude",
+    "chatgpt",
+    "ai",
     "domain",
     "domain-search",
+    "domain-availability",
+    "godaddy",
     "porkbun",
     "namecheap",
     "whois",
     "rdap",
     "registrar",
-    "vibecoding"
+    "premium-domain",
+    "dns",
+    "tld"
   ],
   "author": "Doruk Ardahan",
   "license": "MIT",
