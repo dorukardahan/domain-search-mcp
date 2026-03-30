@@ -16,6 +16,10 @@ Fast, local-first domain availability checks for MCP clients. Works with zero co
 
 Built on the [Model Context Protocol](https://modelcontextprotocol.io) for Claude, Codex, VS Code, Cursor, Cline, and other MCP-compatible clients.
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/dorukardahan-domain-search-mcp).
+
 ## Features
 
 | Feature | Description |
