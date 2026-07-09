@@ -28,3 +28,20 @@ describe('scoreName single-affix slop regression', () => {
     expect(scoreName(n).reasons).not.toContain('clean pronunciation and typing');
   });
 });
+
+// Real-word waiver golden set (task-2): only Phoenix and Matrix are verified
+// members of the regenerated corpus (Zenith/Synergy/Metaphor are genuinely
+// absent from the google-10000-english-no-swears source and are NOT
+// hand-injected -- see task-2-report.md). Zenlab/Metacore/Novastack are
+// coinages, not corpus words, so they must stay midfield (< 60) unaffected
+// by the waiver.
+const REAL_WORD_WAIVER = ['Phoenix', 'Matrix'];
+
+describe('scoreName real-word waiver', () => {
+  it.each(REAL_WORD_WAIVER)('real dictionary word %s scores above 60 (affix penalty waived)', (n) => {
+    expect(scoreName(n).total).toBeGreaterThan(60);
+  });
+  it.each(SINGLE_AFFIX_SLOP)('non-corpus coinage %s stays below 60 (waiver does not apply)', (n) => {
+    expect(scoreName(n).total).toBeLessThan(60);
+  });
+});

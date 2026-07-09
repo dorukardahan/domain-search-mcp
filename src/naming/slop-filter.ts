@@ -3,6 +3,8 @@
  * AI-generated suggestions. Case-insensitive; operates on the bare name
  * (no TLD).
  */
+import { commonWords } from './wordlist.js';
+
 const SLOP_PREFIXES = ['nex', 'nova', 'syn', 'aether', 'quant', 'zen', 'omni', 'meta', 'neo', 'apex', 'tech'];
 const SLOP_SUFFIXES = ['ify', 'ly', 'flow', 'forge', 'hub', 'labs', 'verse', 'gen', 'ix'];
 const SLOP_PAIR_BONUS = 25; // prefix AND suffix both hit => almost certainly slop
@@ -12,13 +14,22 @@ export function slopPenalty(name: string): { penalty: number; hits: string[] } {
   const hits: string[] = [];
   let penalty = 0;
 
-  const prefix = SLOP_PREFIXES.find((p) => n.startsWith(p) && n.length > p.length + 1);
-  if (prefix) { penalty += 55; hits.push(`overused prefix "${prefix}-"`); }
+  // Real dictionary words must not be punished as AI slop for incidental
+  // affix overlap (e.g. "Phoenix"/"Matrix" end in "-ix"; the distinctiveness
+  // dimension already penalizes common-word downsides). Waive affix
+  // penalties entirely when the full normalized name is a corpus word;
+  // digit/cluster/tripled-letter penalties still apply below. On an empty
+  // corpus (guarded loader fallback) this waiver never fires and penalties
+  // behave exactly as before.
+  if (!commonWords().has(n)) {
+    const prefix = SLOP_PREFIXES.find((p) => n.startsWith(p) && n.length > p.length + 1);
+    if (prefix) { penalty += 55; hits.push(`overused prefix "${prefix}-"`); }
 
-  const suffix = SLOP_SUFFIXES.find((s) => n.endsWith(s) && n.length > s.length + 2);
-  if (suffix) { penalty += 55; hits.push(`overused suffix "-${suffix}"`); }
+    const suffix = SLOP_SUFFIXES.find((s) => n.endsWith(s) && n.length > s.length + 2);
+    if (suffix) { penalty += 55; hits.push(`overused suffix "-${suffix}"`); }
 
-  if (prefix && suffix) { penalty += SLOP_PAIR_BONUS; hits.push('prefix+suffix slop pattern'); }
+    if (prefix && suffix) { penalty += SLOP_PAIR_BONUS; hits.push('prefix+suffix slop pattern'); }
+  }
 
   if (/[0-9]/.test(n)) { penalty += 20; hits.push('contains digit'); }
   if (/x[aeiou]?z|z[aeiou]?x/.test(n)) { penalty += 20; hits.push('forced x/z cluster'); }
