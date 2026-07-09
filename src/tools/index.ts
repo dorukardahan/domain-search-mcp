@@ -78,3 +78,10 @@ export {
   executeAiHealth,
   type AiHealthInput,
 } from './ai_health.js';
+
+export {
+  nameProjectTool,
+  nameProjectSchema,
+  executeNameProject,
+  type NameProjectInput,
+} from './name_project.js';

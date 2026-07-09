@@ -60,6 +60,8 @@ import {
   executeExpiringDomains,
   aiHealthTool,
   executeAiHealth,
+  nameProjectTool,
+  executeNameProject,
 } from './tools/index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -75,6 +77,7 @@ const REPO_URL = 'https://github.com/dorukardahan/domain-search-mcp';
  * All available tools.
  */
 const TOOLS: Tool[] = [
+  nameProjectTool as Tool,
   searchDomainTool as Tool,
   bulkSearchTool as Tool,
   compareRegistrarsTool as Tool,
@@ -220,6 +223,9 @@ async function executeToolCall(
 
     case 'ai_health':
       return executeAiHealth(args as Parameters<typeof executeAiHealth>[0]);
+
+    case 'name_project':
+      return executeNameProject(args as Parameters<typeof executeNameProject>[0]);
 
     default:
       throw new DomainSearchError(
