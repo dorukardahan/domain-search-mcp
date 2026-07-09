@@ -57,9 +57,10 @@ interface NameProjectResponse {
     breakdown: { slop: number; phonaesthetics: number; distinctiveness: number };
     reasons: string[];
     clearance?: {                // present only when `targets` was provided
-      domains?: Record<string, boolean | null>;
-      platforms?: Record<string, boolean | null>;
-      verdict?: string;
+      name: string;
+      verdict: "cleared" | "partial" | "taken" | "unknown";
+      domains: { domain: string; available: boolean | null; price_first_year: number | null }[];
+      socials: { platform: string; available: boolean | null }[];
     };
   }>;
   notes?: string[];
