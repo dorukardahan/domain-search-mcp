@@ -31,6 +31,7 @@ import {
 import { getTransportConfig, formatTransportInfo, parseCliAction } from './transports/index.js';
 import { createHttpTransport } from './transports/http.js';
 import { getExposedTools } from './toolset.js';
+import { setTransport } from './runtime-context.js';
 
 import { config, getAvailableSources, hasRegistrarApi } from './config.js';
 import { getServerVersion } from './utils/version.js';
@@ -315,6 +316,10 @@ async function main(): Promise<void> {
 
   // Get transport configuration from CLI args and env vars
   const transportConfig = getTransportConfig();
+
+  // Record the active transport (stdio or http) so tools like name_project can
+  // gate server-side filesystem access when reachable by a remote HTTP caller.
+  setTransport(transportConfig.type);
 
   // Log startup info
   logger.info('Domain Search MCP starting', {

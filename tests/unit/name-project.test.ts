@@ -7,6 +7,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { executeNameProject } from '../../src/tools/name_project';
+import { setTransport } from '../../src/runtime-context';
+
+afterEach(() => {
+  setTransport('stdio');
+});
 
 describe('name_project phase 1', () => {
   it('brief mode returns generation instructions embedding the brief and lanes', async () => {
@@ -42,6 +47,34 @@ describe('name_project phase 1', () => {
     const r = await executeNameProject({ mode: 'auto', project_path: missing });
     expect(r.phase).toBe(1);
     expect(r.instructions).toContain(`Project root: ${missing}`);
+  });
+  it('over HTTP transport, auto mode with project_path skips the filesystem scan and notes it is disabled', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'name-project-scan-'));
+    try {
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'demo-proj', description: 'a demo' }));
+      mkdirSync(join(dir, 'src'));
+      setTransport('http');
+      const r = await executeNameProject({ mode: 'auto', project_path: dir });
+      expect(r.phase).toBe(1);
+      expect(r.instructions).toContain(`Project root: ${dir}`);
+      expect(r.instructions).not.toContain('demo-proj');
+      expect(r.instructions).not.toContain('top-level dirs');
+      expect(r.instructions).not.toContain('src');
+      expect(r.instructions).toMatch(/server-side project scan is disabled over HTTP transport/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it('stdio remains the default transport for a fresh module load, so project_path scanning still runs', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'name-project-scan-'));
+    try {
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'default-transport-proj' }));
+      const r = await executeNameProject({ mode: 'auto', project_path: dir });
+      expect(r.instructions).toContain('default-transport-proj');
+      expect(r.instructions).not.toMatch(/disabled over HTTP transport/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

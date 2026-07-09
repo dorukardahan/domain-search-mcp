@@ -30,6 +30,13 @@ scoring, ranking, and live availability clearance (domains, socials, npm).
 | `constraints` | object | No | - | `{ max_length: number, must_include: string }` |
 | `project_path` | string | No | - | mode=auto: project dir for a light server-side scan (reads `package.json` name/description and top-level directory names, up to 15, skipping dotdirs and `node_modules`; best-effort, falls back silently if the path is missing/unreadable) |
 
+`project_path` only triggers its filesystem scan when the server is running on the `stdio`
+transport (the default for Claude Desktop, Cursor, VS Code, and library/test use). When the
+server is started with `--http` or `MCP_TRANSPORT=http`, the scan is skipped entirely - a
+remote HTTP caller could otherwise use `project_path` to enumerate directories and read
+`package.json` contents on the machine hosting the server - and the phase-1 instructions
+include a note that the server-side project scan is disabled over HTTP transport.
+
 ### Lanes
 
 | Lane | Description |

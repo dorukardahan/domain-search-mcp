@@ -15,6 +15,7 @@ import { scoreName } from '../naming/scorer.js';
 import { clearName, type ClearanceReport } from '../naming/clearance.js';
 import type { LaneKey, ScoredName } from '../naming/types.js';
 import { wrapError } from '../utils/errors.js';
+import { getTransport } from '../runtime-context.js';
 
 const LANE_KEYS = LANES.map((l) => l.key) as [LaneKey, ...LaneKey[]];
 const DEFAULT_LANES: LaneKey[] = ['evocative', 'invented', 'compound', 'premium'];
@@ -125,8 +126,15 @@ function phase1(input: NameProjectInput): NameProjectResult {
       'the source tree top level, and any docs/ overview. Derive a one-paragraph brief: what the project does, ' +
       'who uses it, its personality.';
     if (input.project_path) {
-      const scan = scanProjectPath(input.project_path);
-      subject += ` Project root: ${input.project_path}.` + (scan ? ` ${scan}` : '');
+      if (getTransport() === 'http') {
+        // Remote HTTP callers must not be able to trigger a server-side filesystem
+        // scan (package.json read + directory enumeration) - see runtime-context.ts.
+        subject += ` Project root: ${input.project_path}. ` +
+          'Note: server-side project scan is disabled over HTTP transport.';
+      } else {
+        const scan = scanProjectPath(input.project_path);
+        subject += ` Project root: ${input.project_path}.` + (scan ? ` ${scan}` : '');
+      }
     }
   } else if (input.mode === 'from_name') {
     subject = `The user already loves the name "${input.name}". Generate close variants, spellings, and sibling names around it.`;
