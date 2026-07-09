@@ -16,6 +16,7 @@ interface NameProjectFormatPayload {
   shortlist?: Array<{
     name: string;
     total: number;
+    band?: 'strong' | 'middling' | 'weak';
     reasons: string[];
     clearance?: {
       verdict: string;
@@ -274,7 +275,7 @@ function formatNameProject(result: NameProjectFormatPayload): string {
     }
     return [
       entry.name,
-      entry.total.toString(),
+      entry.band ? `${entry.total} ${entry.band}` : entry.total.toString(),
       entry.clearance?.verdict ?? '-',
       badges.length > 0 ? badges.join(' ') : '-',
       entry.reasons.slice(0, 2).join('; ') || '-',

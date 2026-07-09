@@ -8,9 +8,9 @@
 [![Glama](https://img.shields.io/badge/Glama-Server-0ea5e9)](https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp)
 [![Context7](https://img.shields.io/badge/Context7-Indexed-16a34a)](https://context7.com/dorukardahan/domain-search-mcp)
 
-**Naming engine with availability intelligence** — an MCP server that scores the names your model generates and clears them against domains, socials, and package registries. Works with zero configuration using public RDAP/WHOIS, and optionally enriches results with registrar pricing via a backend you control.
+**Naming engine with availability intelligence** — an MCP server that scores the names your model generates and runs availability checks against domains, socials, and package registries. Works with zero configuration using public RDAP/WHOIS, and optionally enriches results with registrar pricing via a backend you control.
 
-**🆕 v1.12.0**: `name_project` — a two-phase naming engine. Call it once to get generation instructions for your model, call it again with `candidates[]` to get anti-slop scoring, ranking, and live availability clearance across domains, socials, and npm. See [name_project](#name_project) below.
+**🆕 v1.12.0**: `name_project` — a two-phase naming engine. Call it once to get generation instructions for your model, call it again with `candidates[]` to get anti-slop scoring, ranking, and live availability checks across domains, socials, and npm. See [name_project](#name_project) below.
 
 **🆕 v1.10.0**: GoDaddy public endpoint integration! Enhanced fallback chain (RDAP → GoDaddy → WHOIS) with premium/auction domain detection. Circuit breaker pattern ensures resilience.
 
@@ -183,15 +183,20 @@ default.
 
 **Flagship two-phase naming engine.** Call it once to get lane-by-lane generation
 instructions for *your* model; call it again with `candidates[]` to get anti-slop
-scoring, ranking, and live availability clearance across domains, socials, and npm.
+scoring, ranking, and live availability checks across domains, socials, and npm.
 
 - **Modes**: `brief` (describe what you're naming), `auto` (analyze the current
   workspace), `from_name` (find domains/variants for a name you already like),
   `from_domain` (fit a project/brand to a domain you found).
 - **Phase 1** (no `candidates`): returns generation instructions + lane prompts.
-- **Phase 2** (`candidates` present): scores + ranks candidates, then clears the
-  top 12 against `targets.tlds` / `targets.platforms` — omit `targets` for pure
-  naming with no availability calls.
+- **Phase 2** (`candidates` present): scores + ranks candidates, then checks
+  availability for the top 12 against `targets.tlds` / `targets.platforms` —
+  omit `targets` for pure naming with no availability calls.
+
+> Scores are heuristic rankings for comparing candidates against each other —
+> not objective, universal brandability truth. Availability results reflect a
+> single source checked at one moment in time; re-verify before you register
+> or rely on anything.
 
 **Phase 1** — call with no `candidates`:
 ```json
@@ -216,10 +221,10 @@ Rules: single words or tight compounds, no taglines, no explanations yet. Then c
 ```
 | Name | Score | Verdict | Badges | Why |
 | --- | --- | --- | --- | --- |
-| Corda | 97 | - | - | no AI-slop patterns; clean pronunciation and typing |
-| Nexify | 60 | - | - | slop: overused prefix "nex-"; slop: overused suffix "-ify" |
+| Corda | 97 strong | - | - | no AI-slop patterns; clean pronunciation and typing |
+| Nexify | 60 middling | - | - | slop: overused prefix "nex-"; slop: overused suffix "-ify" |
 2 candidates received, 2 passed constraints, top 2 returned.
-No clearance targets - pure naming mode.
+No availability-check targets - pure naming mode.
 ```
 
 See [docs/API.md](docs/API.md#name_project) for the full parameter/response schema.

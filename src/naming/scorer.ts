@@ -2,7 +2,18 @@ import { slopPenalty } from './slop-filter.js';
 import { phonaestheticScore } from './phonaesthetics.js';
 import { distinctivenessScore } from './distinctiveness.js';
 import { getLane } from './lanes.js';
-import type { LaneKey, ScoredName, ScoreWeights } from './types.js';
+import type { LaneKey, ScoreBand, ScoredName, ScoreWeights } from './types.js';
+
+// Score band thresholds (task-4: fake-precision guard). A bare 0-100 total
+// invites false confidence, so every score also reports a coarse band.
+export const STRONG_BAND_MIN = 70;
+export const MIDDLING_BAND_MIN = 40;
+
+export function bandFor(total: number): ScoreBand {
+  if (total >= STRONG_BAND_MIN) return 'strong';
+  if (total >= MIDDLING_BAND_MIN) return 'middling';
+  return 'weak';
+}
 
 // Calibrated against the golden set (tests/unit/naming-scorer.test.ts): AI-slop
 // coinages (Nexify, Quantix, Novaflow, Techify) are pronounceable and not
@@ -30,6 +41,7 @@ export function scoreName(name: string, lane?: LaneKey): ScoredName {
 
   return {
     name, lane: lane ?? null, total,
+    band: bandFor(total),
     breakdown: { slop: slopScore, phonaesthetics: phon.score, distinctiveness: distinct.score },
     reasons,
   };

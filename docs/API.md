@@ -15,7 +15,12 @@ Complete API documentation for Domain Search MCP.
 
 Two-phase naming engine. Call without `candidates` to receive generation instructions for
 **your** model (you generate the names); call again with `candidates[]` to receive anti-slop
-scoring, ranking, and live availability clearance (domains, socials, npm).
+scoring, ranking, and live availability checks (domains, socials, npm).
+
+> Scores are heuristic rankings for comparing candidates against each other — not
+> objective, universal brandability truth. Availability results reflect a single
+> source checked at one moment in time; re-verify before you register or rely on
+> anything.
 
 ### Parameters
 
@@ -26,7 +31,7 @@ scoring, ranking, and live availability clearance (domains, socials, npm).
 | `name` | string | mode=from_name/from_domain | - | Existing name or found domain |
 | `candidates` | string[] | No | - | Phase 2: names your model generated (max 50) |
 | `lanes` | string[] | No | evocative, invented, compound, premium | Naming lanes to use (see below) |
-| `targets` | object | No | - | `{ tlds: string[], platforms: string[] }` clearance targets. Omit for pure naming (no availability calls) |
+| `targets` | object | No | - | `{ tlds: string[], platforms: string[] }` availability-check targets. Omit for pure naming (no availability calls) |
 | `constraints` | object | No | - | `{ max_length: number, must_include: string }` |
 | `project_path` | string | No | - | mode=auto: project dir for a light server-side scan (reads `package.json` name/description and top-level directory names, up to 15, skipping dotdirs and `node_modules`; best-effort, falls back silently if the path is missing/unreadable) |
 
@@ -66,7 +71,8 @@ interface NameProjectResponse {
   shortlist?: Array<{
     name: string;
     lane: string;               // best-fit lane across the requested lanes
-    total: number;               // 0-100
+    total: number;               // 0-100 (heuristic ranking, not an absolute truth)
+    band: "strong" | "middling" | "weak"; // coarse read of total: >=70 strong, 40-69 middling, <40 weak
     breakdown: { slop: number; phonaesthetics: number; distinctiveness: number };
     reasons: string[];
     clearance?: {                // present only when `targets` was provided
@@ -98,7 +104,7 @@ const phase1 = await nameProject({ mode: "brief", brief: "an MCP naming engine" 
 //     { "key": "premium", "promptFragment": "Short, expensive-feeling names: 4-7 letters, strong single or double syllable (like Stripe, Vercel, Arc)." }
 //   ],
 //   "instructions": "Brief: an MCP naming engine\n\nNow generate between 30 and 50 name candidates spread across these lanes:\n- [evocative] ...\n\nRules: single words or tight compounds, no taglines, no explanations yet. Then call name_project again with the SAME arguments plus candidates:[...] to get scoring and availability.",
-//   "resubmit_hint": "Call name_project again with candidates[] filled to receive the scored, cleared shortlist."
+//   "resubmit_hint": "Call name_project again with candidates[] filled to receive the scored, availability-checked shortlist."
 // }
 ```
 
@@ -120,6 +126,7 @@ const phase2 = await nameProject({
 //       "name": "Corda",
 //       "lane": "invented",
 //       "total": 97,
+//       "band": "strong",
 //       "breakdown": { "slop": 100, "phonaesthetics": 100, "distinctiveness": 80 },
 //       "reasons": ["no AI-slop patterns", "clean pronunciation and typing"]
 //     },
@@ -127,20 +134,21 @@ const phase2 = await nameProject({
 //       "name": "Nexify",
 //       "lane": "premium",
 //       "total": 60,
+//       "band": "middling",
 //       "breakdown": { "slop": 0, "phonaesthetics": 100, "distinctiveness": 80 },
 //       "reasons": ["slop: overused prefix \"nex-\"", "slop: overused suffix \"-ify\"", "slop: prefix+suffix slop pattern"]
 //     }
 //   ],
 //   "notes": [
 //     "2 candidates received, 2 passed constraints, top 2 returned.",
-//     "No clearance targets - pure naming mode."
+//     "No availability-check targets - pure naming mode."
 //   ]
 // }
 ```
 
 No `targets` were provided in this example, so `clearance` is omitted from each shortlist
-entry and no domain/social/npm lookups ran. Clearance only runs on the top-12 shortlist when
-`targets.tlds` or `targets.platforms` is set — this protects registries/social platforms from
+entry and no domain/social/npm lookups ran. Availability checks only run on the top-12
+shortlist when `targets.tlds` or `targets.platforms` is set — this protects registries/social platforms from
 being hit for every raw candidate.
 
 ---

@@ -3,8 +3,8 @@
  *
  * Phase 1 (no candidates): returns generation instructions for the CALLING
  * model to produce name candidates across selected naming lanes.
- * Phase 2 (candidates given): scores, ranks, and optionally clears
- * (domain/social availability) the submitted candidates.
+ * Phase 2 (candidates given): scores, ranks, and optionally runs
+ * availability checks (domain/social) on the submitted candidates.
  */
 
 import { z } from 'zod';
@@ -62,7 +62,7 @@ export const nameProjectTool = {
   description:
     'Two-phase naming engine. Call without candidates to receive generation instructions for YOUR model ' +
     '(you generate the names). Call again with candidates[] to get anti-slop scoring, ranking, and live ' +
-    'availability clearance (domains, socials, npm). Modes: brief (describe it), auto (I analyze the current ' +
+    'availability checks (domains, socials, npm). Modes: brief (describe it), auto (I analyze the current ' +
     'workspace), from_name (find domains/variants for a name), from_domain (fit a found domain to a project).',
   inputSchema: {
     type: 'object',
@@ -72,7 +72,7 @@ export const nameProjectTool = {
       name: { type: 'string', description: 'Existing name or found domain (from_name / from_domain).' },
       candidates: { type: 'array', items: { type: 'string' }, description: 'Phase 2: names your model generated (max 50).' },
       lanes: { type: 'array', items: { type: 'string' }, description: 'Naming lanes to use.' },
-      targets: { type: 'object', description: 'Clearance targets: {tlds:[...], platforms:[...]}. Empty = pure naming, no availability checks.' },
+      targets: { type: 'object', description: 'Availability-check targets: {tlds:[...], platforms:[...]}. Empty = pure naming, no availability checks.' },
       constraints: { type: 'object', description: '{max_length, must_include}' },
       project_path: { type: 'string', description: 'auto mode: project dir for a light server-side scan (package.json name/description + top-level directory names, best-effort, no throw on missing/unreadable path).' },
     },
@@ -153,7 +153,7 @@ function phase1(input: NameProjectInput): NameProjectResult {
       `${subject}\n\nNow generate between 30 and 50 name candidates spread across these lanes:\n${laneBlock}\n` +
       `${constraints}\nRules: single words or tight compounds, no taglines, no explanations yet. ` +
       `Then call name_project again with the SAME arguments plus candidates:[...] to get scoring and availability.`,
-    resubmit_hint: 'Call name_project again with candidates[] filled to receive the scored, cleared shortlist.',
+    resubmit_hint: 'Call name_project again with candidates[] filled to receive the scored, availability-checked shortlist.',
   };
 }
 
@@ -191,7 +191,7 @@ async function phase2(input: NameProjectInput): Promise<NameProjectResult> {
 
   const notes = [
     `${all.length} candidates received, ${filtered.length} passed constraints, top ${top.length} returned.`,
-    wantClearance ? 'Clearance run on the shortlist only (protects registries).' : 'No clearance targets - pure naming mode.',
+    wantClearance ? 'Availability checks run on the shortlist only (protects registries).' : 'No availability-check targets - pure naming mode.',
   ];
   return { phase: 2, mode: input.mode, shortlist, notes };
 }

@@ -50,7 +50,7 @@ describe('formatToolResult', () => {
       mode: 'brief',
       instructions: 'Brief: an MCP naming engine\n\nNow generate between 30 and 50 name candidates',
       lanes: [{ key: 'evocative', promptFragment: 'Real words borrowed for their feeling.' }],
-      resubmit_hint: 'Call name_project again with candidates[] filled to receive the scored, cleared shortlist.',
+      resubmit_hint: 'Call name_project again with candidates[] filled to receive the scored, availability-checked shortlist.',
     };
 
     const text = formatToolResult('name_project', payload, 'table');
@@ -69,6 +69,7 @@ describe('formatToolResult', () => {
           name: 'Corda',
           lane: 'evocative',
           total: 95,
+          band: 'strong',
           breakdown: { slop: 100, phonaesthetics: 100, distinctiveness: 80 },
           reasons: ['no AI-slop patterns', 'clean pronunciation and typing', 'a third reason that should be cut'],
           clearance: {
@@ -85,6 +86,7 @@ describe('formatToolResult', () => {
           name: 'Nexify',
           lane: 'evocative',
           total: 55,
+          band: 'middling',
           breakdown: { slop: 0, phonaesthetics: 100, distinctiveness: 80 },
           reasons: ['slop: overused prefix "nex-"', 'slop: overused suffix "-ify"'],
         },
@@ -96,7 +98,8 @@ describe('formatToolResult', () => {
 
     expect(text).toContain('| Name | Score | Verdict | Badges | Why |');
     expect(text).toContain('Corda');
-    expect(text).toContain('95');
+    expect(text).toContain('95 strong');
+    expect(text).toContain('55 middling');
     expect(text).toContain('com✓');
     expect(text).toContain('io?');
     expect(text).toContain('github✗');
@@ -104,5 +107,26 @@ describe('formatToolResult', () => {
     expect(text).toContain('no AI-slop patterns; clean pronunciation and typing');
     expect(text).not.toContain('a third reason that should be cut');
     expect(text).toContain('2 candidates received, 2 passed constraints, top 2 returned.');
+  });
+
+  it('shows the score band next to the numeric score (fake-precision guard)', () => {
+    const payload = {
+      phase: 2,
+      mode: 'brief',
+      shortlist: [
+        {
+          name: 'Ember',
+          lane: 'evocative',
+          total: 86,
+          band: 'strong',
+          breakdown: { slop: 100, phonaesthetics: 90, distinctiveness: 80 },
+          reasons: ['no AI-slop patterns'],
+        },
+      ],
+    };
+
+    const text = formatToolResult('name_project', payload, 'table');
+
+    expect(text).toContain('86 strong');
   });
 });

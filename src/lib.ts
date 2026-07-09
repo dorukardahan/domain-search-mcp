@@ -19,4 +19,4 @@ export { LANES, getLane } from './naming/lanes.js';
 export { slopPenalty } from './naming/slop-filter.js';
 export { phonaestheticScore } from './naming/phonaesthetics.js';
 export { distinctivenessScore } from './naming/distinctiveness.js';
-export type { LaneKey, NamingLane, ScoredName, ScoreBreakdown, ScoreWeights } from './naming/types.js';
+export type { LaneKey, NamingLane, ScoredName, ScoreBand, ScoreBreakdown, ScoreWeights } from './naming/types.js';

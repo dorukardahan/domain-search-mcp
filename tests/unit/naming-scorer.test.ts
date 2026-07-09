@@ -1,4 +1,4 @@
-import { scoreName } from '../../src/naming/scorer';
+import { scoreName, bandFor } from '../../src/naming/scorer';
 
 const SLOP = ['Nexify', 'Quantix', 'Novaflow', 'Techify'];
 const GOOD = ['Latch', 'Ember', 'Corda', 'Wombat'];
@@ -42,5 +42,26 @@ describe('scoreName real-word waiver', () => {
   });
   it.each(SINGLE_AFFIX_SLOP)('non-corpus coinage %s stays below 60 (waiver does not apply)', (n) => {
     expect(scoreName(n).total).toBeLessThan(60);
+  });
+});
+
+// Score band (task-4): a bare 0-100 total reads as fake precision, so scoreName
+// also reports a coarse band. Thresholds: >=70 strong, 40-69 middling, <40 weak.
+describe('score band thresholds', () => {
+  it('39 is weak (just below the middling floor)', () => {
+    expect(bandFor(39)).toBe('weak');
+  });
+  it('40 is middling (lower boundary)', () => {
+    expect(bandFor(40)).toBe('middling');
+  });
+  it('69 is middling (just below the strong floor)', () => {
+    expect(bandFor(69)).toBe('middling');
+  });
+  it('70 is strong (lower boundary)', () => {
+    expect(bandFor(70)).toBe('strong');
+  });
+  it('scoreName attaches a band consistent with bandFor(total)', () => {
+    const s = scoreName('Corda');
+    expect(s.band).toBe(bandFor(s.total));
   });
 });
