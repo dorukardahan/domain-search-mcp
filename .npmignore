@@ -11,6 +11,7 @@ src/
 # Large data files (bundle only the wordlist, not generated datasets)
 data/*
 !data/common-words.json
+!data/english-words.json
 training/
 cache-backend/
 

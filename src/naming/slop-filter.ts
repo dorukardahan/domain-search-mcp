@@ -3,7 +3,7 @@
  * AI-generated suggestions. Case-insensitive; operates on the bare name
  * (no TLD).
  */
-import { commonWords } from './wordlist.js';
+import { englishWords } from './wordlist.js';
 
 const SLOP_PREFIXES = ['nex', 'nova', 'syn', 'aether', 'quant', 'zen', 'omni', 'meta', 'neo', 'apex', 'tech'];
 const SLOP_SUFFIXES = ['ify', 'ly', 'flow', 'forge', 'hub', 'labs', 'verse', 'gen', 'ix'];
@@ -15,13 +15,15 @@ export function slopPenalty(name: string): { penalty: number; hits: string[] } {
   let penalty = 0;
 
   // Real dictionary words must not be punished as AI slop for incidental
-  // affix overlap (e.g. "Phoenix"/"Matrix" end in "-ix"; the distinctiveness
-  // dimension already penalizes common-word downsides). Waive affix
-  // penalties entirely when the full normalized name is a corpus word;
+  // affix overlap (e.g. "Zenith"/"Phoenix"/"Matrix" hitting zen-/-ix; the
+  // distinctiveness dimension already penalizes common-word downsides).
+  // Waive affix penalties entirely when the full normalized name is in the
+  // broad english-words dictionary (50k; deliberately wider than the 10k
+  // common-words list distinctiveness uses, to cover formal/literary words);
   // digit/cluster/tripled-letter penalties still apply below. On an empty
-  // corpus (guarded loader fallback) this waiver never fires and penalties
-  // behave exactly as before.
-  if (!commonWords().has(n)) {
+  // dictionary (guarded loader fallback) this waiver never fires and
+  // penalties behave exactly as before.
+  if (!englishWords().has(n)) {
     const prefix = SLOP_PREFIXES.find((p) => n.startsWith(p) && n.length > p.length + 1);
     if (prefix) { penalty += 55; hits.push(`overused prefix "${prefix}-"`); }
 

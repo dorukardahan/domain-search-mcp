@@ -24,15 +24,12 @@ describe('slopPenalty', () => {
 
   // Real dictionary words must not draw slop AFFIX penalties (mythic
   // landmine: Zenith, Phoenix, Matrix, Synergy, Metaphor previously scored
-  // 55 via zen-/-ix/syn-/meta- affixes). The waiver is corpus-membership
-  // based (task-2): only Phoenix and Matrix are verified members of the
-  // regenerated data/common-words.json (built from
-  // google-10000-english-no-swears, full filtered list, no top-5000 cut).
-  // Zenith, Synergy, and Metaphor are genuinely absent from that source
-  // list (confirmed against the raw downloaded file) and are NOT
-  // hand-injected per task instructions -- see task-2-report.md for the
-  // full gap writeup.
-  it.each(['Phoenix', 'Matrix'])(
+  // 55 via zen-/-ix/syn-/meta- affixes). The waiver checks the broad
+  // real-word dictionary data/english-words.json (hermitdave/FrequencyWords
+  // en_50k), NOT the 10k common-words list distinctiveness uses. All five
+  // names are verified members of the generated 50k corpus (task-2
+  // amendment; see task-2-report.md).
+  it.each(['Zenith', 'Phoenix', 'Matrix', 'Synergy', 'Metaphor'])(
     'waives affix penalty for real dictionary word %s (penalty === 0)',
     (name) => {
       expect(slopPenalty(name).penalty).toBe(0);

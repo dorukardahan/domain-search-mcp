@@ -44,6 +44,7 @@ temp/
 .env
 data/*
 !data/common-words.json
+!data/english-words.json
 training/output/
 training/output-dpo/
 training/rlhf/model_responses.jsonl
