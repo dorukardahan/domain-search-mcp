@@ -8,6 +8,8 @@
  */
 
 import { z } from 'zod';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { LANES, getLane } from '../naming/lanes.js';
 import { scoreName } from '../naming/scorer.js';
 import { clearName, type ClearanceReport } from '../naming/clearance.js';
@@ -71,11 +73,42 @@ export const nameProjectTool = {
       lanes: { type: 'array', items: { type: 'string' }, description: 'Naming lanes to use.' },
       targets: { type: 'object', description: 'Clearance targets: {tlds:[...], platforms:[...]}. Empty = pure naming, no availability checks.' },
       constraints: { type: 'object', description: '{max_length, must_include}' },
-      project_path: { type: 'string', description: 'auto mode: project dir for a light server-side scan.' },
+      project_path: { type: 'string', description: 'auto mode: project dir for a light server-side scan (package.json name/description + top-level directory names, best-effort, no throw on missing/unreadable path).' },
     },
     required: ['mode'],
   },
 };
+
+/**
+ * Light server-side scan of a project directory: manifest name/description
+ * (package.json only, best-effort) plus top-level directory names. Purely
+ * additive context for phase-1 instructions - any FS error (missing path,
+ * unreadable manifest, corrupt JSON) is swallowed and the caller falls back
+ * silently to the plain path-mention wording. Never throws.
+ */
+function scanProjectPath(projectPath: string): string | null {
+  try {
+    let manifestPart = '';
+    try {
+      const pkg = JSON.parse(readFileSync(join(projectPath, 'package.json'), 'utf8')) as {
+        name?: string; description?: string;
+      };
+      if (pkg.name) manifestPart = `manifest name ${pkg.name}${pkg.description ? ` - ${pkg.description}` : ''}`;
+    } catch {
+      // No readable/valid package.json - continue with directory listing only.
+    }
+
+    const dirs = readdirSync(projectPath, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
+      .slice(0, 15)
+      .map((e) => e.name);
+
+    const parts = [manifestPart, dirs.length ? `top-level dirs: ${dirs.join(', ')}` : ''].filter(Boolean);
+    return parts.length ? `Server scan: ${parts.join('; ')}.` : null;
+  } catch {
+    return null;
+  }
+}
 
 function phase1(input: NameProjectInput): NameProjectResult {
   const laneKeys = input.lanes ?? DEFAULT_LANES;
@@ -90,7 +123,11 @@ function phase1(input: NameProjectInput): NameProjectResult {
     subject =
       'First, analyze the CURRENT workspace yourself: read the README, the package.json/pyproject/Cargo manifest, ' +
       'the source tree top level, and any docs/ overview. Derive a one-paragraph brief: what the project does, ' +
-      'who uses it, its personality.' + (input.project_path ? ` Project root: ${input.project_path}.` : '');
+      'who uses it, its personality.';
+    if (input.project_path) {
+      const scan = scanProjectPath(input.project_path);
+      subject += ` Project root: ${input.project_path}.` + (scan ? ` ${scan}` : '');
+    }
   } else if (input.mode === 'from_name') {
     subject = `The user already loves the name "${input.name}". Generate close variants, spellings, and sibling names around it.`;
   } else if (input.mode === 'from_domain') {

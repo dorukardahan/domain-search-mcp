@@ -22,7 +22,7 @@ scoring, ranking, and live availability clearance (domains, socials, npm).
 | `lanes` | string[] | No | evocative, invented, compound, premium | Naming lanes to use (see below) |
 | `targets` | object | No | - | `{ tlds: string[], platforms: string[] }` clearance targets. Omit for pure naming (no availability calls) |
 | `constraints` | object | No | - | `{ max_length: number, must_include: string }` |
-| `project_path` | string | No | - | mode=auto: project dir for a light server-side scan |
+| `project_path` | string | No | - | mode=auto: project dir for a light server-side scan (reads `package.json` name/description and top-level directory names, up to 15, skipping dotdirs and `node_modules`; best-effort, falls back silently if the path is missing/unreadable) |
 
 ### Lanes
 

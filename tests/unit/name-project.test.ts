@@ -3,6 +3,9 @@ jest.mock('../../src/naming/clearance', () => ({
     name, verdict: 'cleared', domains: [{ domain: `${name}.com`, available: true, price_first_year: 11 }], socials: [],
   })),
 }));
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { executeNameProject } from '../../src/tools/name_project';
 
 describe('name_project phase 1', () => {
@@ -20,6 +23,25 @@ describe('name_project phase 1', () => {
   });
   it('rejects brief mode without a brief', async () => {
     await expect(executeNameProject({ mode: 'brief' } as never)).rejects.toThrow();
+  });
+  it('auto mode with a valid project_path weaves the manifest name/description and top-level dirs into instructions', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'name-project-scan-'));
+    try {
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'demo-proj', description: 'a demo' }));
+      mkdirSync(join(dir, 'src'));
+      const r = await executeNameProject({ mode: 'auto', project_path: dir });
+      expect(r.phase).toBe(1);
+      expect(r.instructions).toContain('demo-proj');
+      expect(r.instructions).toContain('src');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it('auto mode with a nonexistent project_path does not throw and falls back to the path-mention wording', async () => {
+    const missing = join(tmpdir(), 'name-project-scan-does-not-exist-xyz');
+    const r = await executeNameProject({ mode: 'auto', project_path: missing });
+    expect(r.phase).toBe(1);
+    expect(r.instructions).toContain(`Project root: ${missing}`);
   });
 });
 
