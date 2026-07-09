@@ -13,10 +13,10 @@ export function slopPenalty(name: string): { penalty: number; hits: string[] } {
   let penalty = 0;
 
   const prefix = SLOP_PREFIXES.find((p) => n.startsWith(p) && n.length > p.length + 1);
-  if (prefix) { penalty += 35; hits.push(`overused prefix "${prefix}-"`); }
+  if (prefix) { penalty += 55; hits.push(`overused prefix "${prefix}-"`); }
 
   const suffix = SLOP_SUFFIXES.find((s) => n.endsWith(s) && n.length > s.length + 2);
-  if (suffix) { penalty += 35; hits.push(`overused suffix "-${suffix}"`); }
+  if (suffix) { penalty += 55; hits.push(`overused suffix "-${suffix}"`); }
 
   if (prefix && suffix) { penalty += SLOP_PAIR_BONUS; hits.push('prefix+suffix slop pattern'); }
 

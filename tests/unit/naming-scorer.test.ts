@@ -17,3 +17,14 @@ describe('scoreName golden set', () => {
     expect(s.reasons.length).toBeGreaterThan(0);
   });
 });
+
+const SINGLE_AFFIX_SLOP = ['Zenlab', 'Metacore', 'Novastack'];
+
+describe('scoreName single-affix slop regression', () => {
+  it.each(SINGLE_AFFIX_SLOP)('single-affix slop name %s lands below 60 (midfield, not good)', (n) => {
+    expect(scoreName(n).total).toBeLessThan(60);
+  });
+  it.each(SINGLE_AFFIX_SLOP)('%s is not praised for clean pronunciation despite slop hits', (n) => {
+    expect(scoreName(n).reasons).not.toContain('clean pronunciation and typing');
+  });
+});
