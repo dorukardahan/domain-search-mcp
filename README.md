@@ -10,7 +10,7 @@
 
 **Naming engine with availability intelligence** — an MCP server that scores the names your model generates and clears them against domains, socials, and package registries. Works with zero configuration using public RDAP/WHOIS, and optionally enriches results with registrar pricing via a backend you control.
 
-**🆕 v1.11.0**: `name_project` — a two-phase naming engine. Call it once to get generation instructions for your model, call it again with `candidates[]` to get anti-slop scoring, ranking, and live availability clearance across domains, socials, and npm. See [name_project](#name_project) below.
+**🆕 v1.12.0**: `name_project` — a two-phase naming engine. Call it once to get generation instructions for your model, call it again with `candidates[]` to get anti-slop scoring, ranking, and live availability clearance across domains, socials, and npm. See [name_project](#name_project) below.
 
 **🆕 v1.10.0**: GoDaddy public endpoint integration! Enhanced fallback chain (RDAP → GoDaddy → WHOIS) with premium/auction domain detection. Circuit breaker pattern ensures resilience.
 
