@@ -9,7 +9,6 @@ tsconfig.json
 src/
 
 # Large data files
-data/
 training/
 cache-backend/
 
