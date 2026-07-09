@@ -5,6 +5,14 @@
   "description": "Zero-config domain availability MCP for Claude & ChatGPT. AI-powered suggestions via Qwen 7B. RDAP → GoDaddy → WHOIS fallback chain with premium/auction detection. Stdio + HTTP transports.",
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib.d.ts",
+      "default": "./dist/lib.js"
+    },
+    "./server": "./dist/server.js",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "domain-search-mcp": "bin/domain-search-mcp"
   },
