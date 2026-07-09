@@ -27,8 +27,25 @@ describe('clearName', () => {
   it('returns verdict unknown (not a throw) when a source fails', async () => {
     (searchDomain as jest.Mock).mockRejectedValueOnce(new Error('rdap down'));
     const r = await clearName('corda', { tlds: ['com'] });
-    expect(r.domains).toEqual([]);
+    // The rejected source resolves to null internally, but the requested TLD
+    // must still be backfilled as an unchecked (null) entry rather than
+    // vanishing - a rejected source must never look identical to "nothing
+    // was requested".
+    expect(r.domains).toEqual([{ domain: 'corda.com', available: null, price_first_year: null }]);
     expect(r.verdict).toBe('unknown');
+  });
+  it('rejected domain source + fully-available socials => partial, never cleared', async () => {
+    (searchDomain as jest.Mock).mockRejectedValueOnce(new Error('rdap down'));
+    (executeCheckSocials as jest.Mock).mockResolvedValueOnce({
+      results: [
+        { platform: 'github', handle: 'corda', available: true, url: '', checked_at: '', confidence: 'high' },
+      ],
+    });
+    const r = await clearName('corda', { tlds: ['com'], platforms: ['github'] });
+    expect(r.domains).toContainEqual({ domain: 'corda.com', available: null, price_first_year: null });
+    // Verdict must not read "cleared" off the surviving source alone while
+    // the rejected source's requested target is still unchecked.
+    expect(r.verdict).toBe('partial');
   });
   it('skips clearance entirely for empty targets (non-domain naming)', async () => {
     const r = await clearName('corda', {});
