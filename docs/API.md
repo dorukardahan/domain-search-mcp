@@ -5,6 +5,132 @@ Complete API documentation for Domain Search MCP.
 > Note: Tool outputs are returned as Markdown tables by default.  
 > Set `OUTPUT_FORMAT=json` to get raw JSON matching the schemas below.
 
+## name_project
+
+Two-phase naming engine. Call without `candidates` to receive generation instructions for
+**your** model (you generate the names); call again with `candidates[]` to receive anti-slop
+scoring, ranking, and live availability clearance (domains, socials, npm).
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `mode` | string | Yes | - | `brief` \| `auto` \| `from_name` \| `from_domain` |
+| `brief` | string | mode=brief | - | What you are naming (1-2000 chars) |
+| `name` | string | mode=from_name/from_domain | - | Existing name or found domain |
+| `candidates` | string[] | No | - | Phase 2: names your model generated (max 50) |
+| `lanes` | string[] | No | evocative, invented, compound, premium | Naming lanes to use (see below) |
+| `targets` | object | No | - | `{ tlds: string[], platforms: string[] }` clearance targets. Omit for pure naming (no availability calls) |
+| `constraints` | object | No | - | `{ max_length: number, must_include: string }` |
+| `project_path` | string | No | - | mode=auto: project dir for a light server-side scan |
+
+### Lanes
+
+| Lane | Description |
+|------|-------------|
+| `literal` | Plain, descriptive names (e.g. LogView) |
+| `evocative` | Real words borrowed for feeling, not meaning (Slack, Notion, Bolt) |
+| `invented` | Coined, pronounceable words (Zapier, Klarna) |
+| `compound` | Two short real words fused (Facebook, Snapchat) |
+| `mythic` | Mythology/astronomy/botany names (Atlas, Vesta) |
+| `playful` | Light, humorous, human names (Wombat, Beeper) |
+| `premium` | Short, expensive-feeling names (Stripe, Vercel, Arc) |
+| `weird` | Deliberately odd, memorable outliers |
+
+Default lanes (when `lanes` is omitted): `evocative`, `invented`, `compound`, `premium`.
+
+### Response
+
+```typescript
+interface NameProjectResponse {
+  phase: 1 | 2;
+  mode: "brief" | "auto" | "from_name" | "from_domain";
+  // Phase 1 (no candidates submitted):
+  instructions?: string;
+  lanes?: Array<{ key: string; promptFragment: string }>;
+  resubmit_hint?: string;
+  // Phase 2 (candidates submitted):
+  shortlist?: Array<{
+    name: string;
+    lane: string;               // best-fit lane across the requested lanes
+    total: number;               // 0-100
+    breakdown: { slop: number; phonaesthetics: number; distinctiveness: number };
+    reasons: string[];
+    clearance?: {                // present only when `targets` was provided
+      domains?: Record<string, boolean | null>;
+      platforms?: Record<string, boolean | null>;
+      verdict?: string;
+    };
+  }>;
+  notes?: string[];
+}
+```
+
+### Example
+
+**Phase 1** — no `candidates`, get generation instructions:
+
+```typescript
+const phase1 = await nameProject({ mode: "brief", brief: "an MCP naming engine" });
+
+// phase1:
+// {
+//   "phase": 1,
+//   "mode": "brief",
+//   "lanes": [
+//     { "key": "evocative", "promptFragment": "Real words borrowed for their feeling, not their meaning (like Slack, Notion, Bolt). Single dictionary words preferred." },
+//     { "key": "invented", "promptFragment": "Coined words that do not exist but sound like they could (like Zapier, Klarna). Must be pronounceable on first read." },
+//     { "key": "compound", "promptFragment": "Two short real words fused (like Facebook, Snapchat). Both halves must stay readable; no glue letters." },
+//     { "key": "premium", "promptFragment": "Short, expensive-feeling names: 4-7 letters, strong single or double syllable (like Stripe, Vercel, Arc)." }
+//   ],
+//   "instructions": "Brief: an MCP naming engine\n\nNow generate between 30 and 50 name candidates spread across these lanes:\n- [evocative] ...\n\nRules: single words or tight compounds, no taglines, no explanations yet. Then call name_project again with the SAME arguments plus candidates:[...] to get scoring and availability.",
+//   "resubmit_hint": "Call name_project again with candidates[] filled to receive the scored, cleared shortlist."
+// }
+```
+
+**Phase 2** — resubmit the same arguments plus `candidates`, get a scored + ranked shortlist:
+
+```typescript
+const phase2 = await nameProject({
+  mode: "brief",
+  brief: "an MCP naming engine",
+  candidates: ["Nexify", "Corda"],
+});
+
+// phase2:
+// {
+//   "phase": 2,
+//   "mode": "brief",
+//   "shortlist": [
+//     {
+//       "name": "Corda",
+//       "lane": "invented",
+//       "total": 97,
+//       "breakdown": { "slop": 100, "phonaesthetics": 100, "distinctiveness": 80 },
+//       "reasons": ["no AI-slop patterns", "clean pronunciation and typing"]
+//     },
+//     {
+//       "name": "Nexify",
+//       "lane": "premium",
+//       "total": 60,
+//       "breakdown": { "slop": 0, "phonaesthetics": 100, "distinctiveness": 80 },
+//       "reasons": ["slop: overused prefix \"nex-\"", "slop: overused suffix \"-ify\"", "slop: prefix+suffix slop pattern"]
+//     }
+//   ],
+//   "notes": [
+//     "2 candidates received, 2 passed constraints, top 2 returned.",
+//     "No clearance targets - pure naming mode."
+//   ]
+// }
+```
+
+No `targets` were provided in this example, so `clearance` is omitted from each shortlist
+entry and no domain/social/npm lookups ran. Clearance only runs on the top-12 shortlist when
+`targets.tlds` or `targets.platforms` is set — this protects registries/social platforms from
+being hit for every raw candidate.
+
+---
+
 ## search_domain
 
 Check domain availability across multiple TLDs with pricing.

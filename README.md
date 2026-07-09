@@ -8,7 +8,9 @@
 [![Glama](https://img.shields.io/badge/Glama-Server-0ea5e9)](https://glama.ai/mcp/servers/@dorukardahan/domain-search-mcp)
 [![Context7](https://img.shields.io/badge/Context7-Indexed-16a34a)](https://context7.com/dorukardahan/domain-search-mcp)
 
-Fast, local-first domain availability checks for MCP clients. Works with zero configuration using public RDAP/WHOIS, and optionally enriches results with registrar pricing via a backend you control.
+**Naming engine with availability intelligence** — an MCP server that scores the names your model generates and clears them against domains, socials, and package registries. Works with zero configuration using public RDAP/WHOIS, and optionally enriches results with registrar pricing via a backend you control.
+
+**🆕 v1.11.0**: `name_project` — a two-phase naming engine. Call it once to get generation instructions for your model, call it again with `candidates[]` to get anti-slop scoring, ranking, and live availability clearance across domains, socials, and npm. See [name_project](#name_project) below.
 
 **🆕 v1.10.0**: GoDaddy public endpoint integration! Enhanced fallback chain (RDAP → GoDaddy → WHOIS) with premium/auction domain detection. Circuit breaker pattern ensures resilience.
 
@@ -166,6 +168,56 @@ curl -X POST https://your-domain/api/tools/search_domain \
 
 ## Tools
 
+By default only 6 tools are exposed to MCP clients (keeps tool-selection sharp):
+`name_project`, `search_domain`, `bulk_search`, `check_socials`, `tld_info`, `ai_health`.
+Set `ADVANCED_TOOLS=true` to restore the full 12-tool surface listed below (see
+[Environment Variables](#environment-variables)).
+
+### name_project
+
+**Flagship two-phase naming engine.** Call it once to get lane-by-lane generation
+instructions for *your* model; call it again with `candidates[]` to get anti-slop
+scoring, ranking, and live availability clearance across domains, socials, and npm.
+
+- **Modes**: `brief` (describe what you're naming), `auto` (analyze the current
+  workspace), `from_name` (find domains/variants for a name you already like),
+  `from_domain` (fit a project/brand to a domain you found).
+- **Phase 1** (no `candidates`): returns generation instructions + lane prompts.
+- **Phase 2** (`candidates` present): scores + ranks candidates, then clears the
+  top 12 against `targets.tlds` / `targets.platforms` — omit `targets` for pure
+  naming with no availability calls.
+
+**Phase 1** — call with no `candidates`:
+```json
+{"mode": "brief", "brief": "an MCP naming engine"}
+```
+```
+Brief: an MCP naming engine
+
+Now generate between 30 and 50 name candidates spread across these lanes:
+- [evocative] Real words borrowed for their feeling, not their meaning (like Slack, Notion, Bolt). Single dictionary words preferred.
+- [invented] Coined words that do not exist but sound like they could (like Zapier, Klarna). Must be pronounceable on first read.
+- [compound] Two short real words fused (like Facebook, Snapchat). Both halves must stay readable; no glue letters.
+- [premium] Short, expensive-feeling names: 4-7 letters, strong single or double syllable (like Stripe, Vercel, Arc).
+
+Rules: single words or tight compounds, no taglines, no explanations yet. Then call name_project again with the SAME arguments plus candidates:[...] to get scoring and availability.
+```
+
+**Phase 2** — resubmit the same arguments plus `candidates`:
+```json
+{"mode": "brief", "brief": "an MCP naming engine", "candidates": ["Nexify", "Corda"]}
+```
+```
+| Name | Score | Verdict | Badges | Why |
+| --- | --- | --- | --- | --- |
+| Corda | 97 | - | - | no AI-slop patterns; clean pronunciation and typing |
+| Nexify | 60 | - | - | slop: overused prefix "nex-"; slop: overused suffix "-ify" |
+2 candidates received, 2 passed constraints, top 2 returned.
+No clearance targets - pure naming mode.
+```
+
+See [docs/API.md](docs/API.md#name_project) for the full parameter/response schema.
+
 ### Core Search
 - `search_domain`: Check a name across multiple TLDs, adds premium/auction signals.
 - `bulk_search`: Check up to 100 names for a single TLD.
@@ -272,6 +324,7 @@ QWEN_API_KEY=optional_if_secured
 | `QWEN_INFERENCE_ENDPOINT` | (none) | Your own AI inference endpoint for `suggest_domains_smart` (offline semantic fallback if unset) |
 | `QWEN_TIMEOUT_MS` | 15000 | AI inference request timeout |
 | `QWEN_MAX_RETRIES` | 2 | Retry count for AI inference failures |
+| `ADVANCED_TOOLS` | false | Set `true` to expose the full 12-tool surface instead of the slim 6-tool default |
 
 ### Output Format
 

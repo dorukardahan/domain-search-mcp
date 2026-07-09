@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.dorukardahan/domain-search-mcp",
-  "description": "Fast domain availability checker with pricing comparison and AI-powered suggestions.",
+  "description": "Naming engine with availability intelligence: score AI-generated names and clear them against domains, socials, and package registries.",
   "repository": {
     "url": "https://github.com/dorukardahan/domain-search-mcp",
     "source": "github"
