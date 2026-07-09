@@ -12,3 +12,11 @@ export type {
   SocialHandleResult,
   SocialPlatform,
 } from './types.js';
+export { scoreName } from './naming/scorer.js';
+export { clearName } from './naming/clearance.js';
+export type { ClearanceReport, ClearanceTargets } from './naming/clearance.js';
+export { LANES, getLane } from './naming/lanes.js';
+export { slopPenalty } from './naming/slop-filter.js';
+export { phonaestheticScore } from './naming/phonaesthetics.js';
+export { distinctivenessScore } from './naming/distinctiveness.js';
+export type { LaneKey, NamingLane, ScoredName, ScoreBreakdown, ScoreWeights } from './naming/types.js';

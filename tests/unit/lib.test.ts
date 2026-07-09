@@ -6,4 +6,11 @@ describe('library entry (src/lib)', () => {
     expect(typeof lib.searchDomain).toBe('function');
     expect(typeof lib.executeCheckSocials).toBe('function');
   });
+
+  it('exposes the naming engine', () => {
+    const lib = require('../../src/lib');
+    expect(typeof lib.scoreName).toBe('function');
+    expect(typeof lib.clearName).toBe('function');
+    expect(Array.isArray(lib.LANES)).toBe(true);
+  });
 });
