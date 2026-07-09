@@ -30,6 +30,7 @@ import {
 
 import { getTransportConfig, formatTransportInfo, parseCliAction } from './transports/index.js';
 import { createHttpTransport } from './transports/http.js';
+import { getExposedTools } from './toolset.js';
 
 import { config, getAvailableSources, hasRegistrarApi } from './config.js';
 import { getServerVersion } from './utils/version.js';
@@ -112,8 +113,10 @@ function createServer(): Server {
   );
 
   // Register tool listing handler
+  // Only the slim default set (or all 12 with ADVANCED_TOOLS=true) is advertised;
+  // executeToolCall below still accepts every tool by name for backward compatibility.
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return { tools: TOOLS };
+    return { tools: getExposedTools(TOOLS, process.env) };
   });
 
   // Register tool call handler
