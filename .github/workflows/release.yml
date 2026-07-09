@@ -43,9 +43,56 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           jq --arg v "$VERSION" '.version=$v | .packages[0].version=$v' server.json > server.json.tmp
           mv server.json.tmp server.json
+
+          # Masked-CI guard: the registry silently 422s server.json descriptions
+          # over 100 chars. Fail fast here with a clear message instead of letting
+          # continue-on-error swallow it.
+          DESC_LEN=$(jq -r '.description | length' server.json)
+          if [ "$DESC_LEN" -gt 100 ]; then
+            echo "::error::server.json description is $DESC_LEN characters (max 100). MCP Registry publish would 422. Trim the description before releasing."
+            exit 1
+          fi
+
           curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
           ./mcp-publisher login github-oidc
           ./mcp-publisher publish
+
+      # Masked-CI guard: the "Publish to MCP Registry" step above is
+      # continue-on-error, so a failed/masked publish (e.g. the 422 case) would
+      # otherwise pass silently. Poll the live registry for the tag's version
+      # and shout loudly (warning annotation + step summary) if it never shows up.
+      - name: Verify MCP Registry
+        continue-on-error: true
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          SEARCH_URL="https://registry.modelcontextprotocol.io/v0/servers?search=io.github.dorukardahan/domain-search-mcp"
+          FOUND=false
+
+          for i in 1 2 3 4 5; do
+            RESPONSE=$(curl -fsSL "$SEARCH_URL" || echo '{}')
+            if echo "$RESPONSE" | jq -e --arg v "$VERSION" '.servers[]? | select(.server.version == $v)' > /dev/null 2>&1; then
+              FOUND=true
+              break
+            fi
+            echo "Registry check $i/5: version $VERSION not visible yet."
+            if [ "$i" -lt 5 ]; then
+              sleep 15
+            fi
+          done
+
+          if [ "$FOUND" = "true" ]; then
+            echo "MCP Registry verified: version $VERSION is live."
+          else
+            echo "::warning::MCP Registry does not show version $VERSION for io.github.dorukardahan/domain-search-mcp after 5 checks (75s). The registry publish step may have failed silently (continue-on-error). Verify manually: $SEARCH_URL"
+            {
+              echo "## :rotating_light: MCP Registry verification FAILED"
+              echo ""
+              echo "Version **$VERSION** was NOT found in the MCP Registry after 5 retries (75s)."
+              echo "The \"Publish to MCP Registry\" step uses \`continue-on-error: true\` and may have failed silently (e.g. a 422)."
+              echo ""
+              echo "**Action required:** check $SEARCH_URL manually, and re-run the \"Publish MCP Registry\" workflow if needed."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Publish release notes
         uses: release-drafter/release-drafter@v6
