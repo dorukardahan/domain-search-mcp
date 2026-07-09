@@ -15,4 +15,10 @@ describe('slopPenalty', () => {
   it('reports which patterns hit', () => {
     expect(slopPenalty('Nexify').hits.join(' ')).toMatch(/prefix|suffix/i);
   });
+  it.each(['Dubai', 'Latex', 'Rolex', 'Complex'])(
+    'does not false-positive on real word %s (penalty < 20)',
+    (name) => {
+      expect(slopPenalty(name).penalty).toBeLessThan(20);
+    },
+  );
 });

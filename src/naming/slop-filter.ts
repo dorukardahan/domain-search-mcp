@@ -4,7 +4,7 @@
  * (no TLD).
  */
 const SLOP_PREFIXES = ['nex', 'nova', 'syn', 'aether', 'quant', 'zen', 'omni', 'meta', 'neo', 'apex', 'tech'];
-const SLOP_SUFFIXES = ['ify', 'ly', 'flow', 'forge', 'hub', 'labs', 'verse', 'gen', 'ai', 'x'];
+const SLOP_SUFFIXES = ['ify', 'ly', 'flow', 'forge', 'hub', 'labs', 'verse', 'gen', 'ix'];
 const SLOP_PAIR_BONUS = 25; // prefix AND suffix both hit => almost certainly slop
 
 export function slopPenalty(name: string): { penalty: number; hits: string[] } {
@@ -20,7 +20,7 @@ export function slopPenalty(name: string): { penalty: number; hits: string[] } {
 
   if (prefix && suffix) { penalty += SLOP_PAIR_BONUS; hits.push('prefix+suffix slop pattern'); }
 
-  if (/[0-9]/.test(n)) { penalty += 20; hits.push('digit substitution'); }
+  if (/[0-9]/.test(n)) { penalty += 20; hits.push('contains digit'); }
   if (/x[aeiou]?z|z[aeiou]?x/.test(n)) { penalty += 20; hits.push('forced x/z cluster'); }
   if (/(.)\1\1/.test(n)) { penalty += 15; hits.push('tripled letter'); }
 
