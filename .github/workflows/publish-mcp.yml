@@ -1,0 +1,30 @@
+name: Publish MCP Registry
+
+# Manual re-publish of the MCP registry listing (e.g. when the release-time
+# registry step failed after npm already published). Version must exist on npm.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (must already be on npm, e.g. 1.12.0)"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish to MCP Registry
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          jq --arg v "$VERSION" '.version=$v | .packages[0].version=$v' server.json > server.json.tmp
+          mv server.json.tmp server.json
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
