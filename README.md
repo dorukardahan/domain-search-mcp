@@ -168,10 +168,16 @@ curl -X POST https://your-domain/api/tools/search_domain \
 
 ## Tools
 
-By default only 6 tools are exposed to MCP clients (keeps tool-selection sharp):
-`name_project`, `search_domain`, `bulk_search`, `check_socials`, `tld_info`, `ai_health`.
-Set `ADVANCED_TOOLS=true` to restore the full 12-tool surface listed below (see
-[Environment Variables](#environment-variables)).
+All 12 tools listed below are exposed to MCP clients by default. The 6-tool
+slim profile (`name_project`, `search_domain`, `bulk_search`, `check_socials`,
+`tld_info`, `ai_health`) is opt-in — set `SLIM_TOOLS=true` if you want a
+sharper tool-selection surface for simpler client integrations (see
+[Environment Variables](#environment-variables)). A future 2.0 release may
+flip the default to slim.
+
+`ADVANCED_TOOLS=true` is a deprecated alias that forces the full surface and
+overrides `SLIM_TOOLS`; it's a harmless no-op today since full is already the
+default.
 
 ### name_project
 
@@ -324,7 +330,8 @@ QWEN_API_KEY=optional_if_secured
 | `QWEN_INFERENCE_ENDPOINT` | (none) | Your own AI inference endpoint for `suggest_domains_smart` (offline semantic fallback if unset) |
 | `QWEN_TIMEOUT_MS` | 15000 | AI inference request timeout |
 | `QWEN_MAX_RETRIES` | 2 | Retry count for AI inference failures |
-| `ADVANCED_TOOLS` | false | Set `true` to expose the full 12-tool surface instead of the slim 6-tool default |
+| `SLIM_TOOLS` | false | Set `true` to opt into the slim 6-tool surface instead of the full 12-tool default |
+| `ADVANCED_TOOLS` | false | Deprecated alias for the pre-`SLIM_TOOLS` flag. Set `true` to force the full 12-tool surface and override `SLIM_TOOLS`; no-op since full is already the default |
 
 ### Output Format
 

@@ -5,6 +5,12 @@ Complete API documentation for Domain Search MCP.
 > Note: Tool outputs are returned as Markdown tables by default.  
 > Set `OUTPUT_FORMAT=json` to get raw JSON matching the schemas below.
 
+> Note: All 12 tools documented below are exposed by default. The 6-tool slim
+> profile (`name_project`, `search_domain`, `bulk_search`, `check_socials`,
+> `tld_info`, `ai_health`) is opt-in via `SLIM_TOOLS=true` — a future 2.0
+> release may flip the default to slim. See the [README](../README.md#tools)
+> for details.
+
 ## name_project
 
 Two-phase naming engine. Call without `candidates` to receive generation instructions for

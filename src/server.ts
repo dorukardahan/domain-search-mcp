@@ -113,8 +113,10 @@ function createServer(): Server {
   );
 
   // Register tool listing handler
-  // Only the slim default set (or all 12 with ADVANCED_TOOLS=true) is advertised;
-  // executeToolCall below still accepts every tool by name for backward compatibility.
+  // All 12 tools are advertised by default; SLIM_TOOLS=true opts into the 6-tool
+  // slim profile (ADVANCED_TOOLS=true is a deprecated alias that forces full
+  // exposure and overrides SLIM_TOOLS). executeToolCall below still accepts
+  // every tool by name regardless, for backward compatibility.
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return { tools: getExposedTools(TOOLS, process.env) };
   });
