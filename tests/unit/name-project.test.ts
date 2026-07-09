@@ -43,4 +43,21 @@ describe('name_project phase 2', () => {
     expect(r.phase).toBe(2);
     expect(r.shortlist.map((s) => s.name)).toContain('Corda');
   });
+  it('from_domain mode strips the tld and seeds the bare name', async () => {
+    const r = await executeNameProject({ mode: 'from_domain', name: 'corda.io', candidates: [] });
+    expect(r.phase).toBe(2);
+    expect(r.shortlist.map((s) => s.name)).toContain('corda');
+  });
+  it('picks the best-fit lane per candidate across requested lanes', async () => {
+    // Wombat breakdown: slop 100, phon 100, distinct 45.
+    // literal (0.3/0.3/0.4): 30 + 30 + 18 = 78. weird (0.5/0.25/0.25): 50 + 25 + 11.25 -> 86.
+    const r = await executeNameProject({ mode: 'brief', brief: 'x', candidates: ['Wombat'], lanes: ['literal', 'weird'] });
+    expect(r.shortlist[0].lane).toBe('weird');
+    expect(r.shortlist[0].total).toBe(86);
+  });
+  it('dedupes candidates case-insensitively keeping the first casing seen', async () => {
+    const r = await executeNameProject({ mode: 'brief', brief: 'x', candidates: ['Corda', 'CORDA', 'corda'] });
+    expect(r.shortlist.map((s) => s.name)).toEqual(['Corda']);
+    expect(r.notes[0]).toContain('1 candidates received');
+  });
 });

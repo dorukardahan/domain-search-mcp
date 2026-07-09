@@ -43,4 +43,66 @@ describe('formatToolResult', () => {
     expect(text).toContain('[sedo](');
     expect(text).toContain('Note: Prices can change.');
   });
+
+  it('renders name_project phase 1 instructions with the resubmit hint', () => {
+    const payload = {
+      phase: 1,
+      mode: 'brief',
+      instructions: 'Brief: an MCP naming engine\n\nNow generate between 30 and 50 name candidates',
+      lanes: [{ key: 'evocative', promptFragment: 'Real words borrowed for their feeling.' }],
+      resubmit_hint: 'Call name_project again with candidates[] filled to receive the scored, cleared shortlist.',
+    };
+
+    const text = formatToolResult('name_project', payload, 'table');
+
+    expect(text).toContain('Brief: an MCP naming engine');
+    expect(text).toContain('Call name_project again with candidates[] filled');
+    expect(text).not.toContain('Output format not implemented');
+  });
+
+  it('renders name_project phase 2 shortlist as a table with clearance badges', () => {
+    const payload = {
+      phase: 2,
+      mode: 'brief',
+      shortlist: [
+        {
+          name: 'Corda',
+          lane: 'evocative',
+          total: 95,
+          breakdown: { slop: 100, phonaesthetics: 100, distinctiveness: 80 },
+          reasons: ['no AI-slop patterns', 'clean pronunciation and typing', 'a third reason that should be cut'],
+          clearance: {
+            name: 'Corda',
+            verdict: 'partial',
+            domains: [
+              { domain: 'corda.com', available: true, price_first_year: 11 },
+              { domain: 'corda.io', available: null, price_first_year: null },
+            ],
+            socials: [{ platform: 'github', available: false }],
+          },
+        },
+        {
+          name: 'Nexify',
+          lane: 'evocative',
+          total: 55,
+          breakdown: { slop: 0, phonaesthetics: 100, distinctiveness: 80 },
+          reasons: ['slop: overused prefix "nex-"', 'slop: overused suffix "-ify"'],
+        },
+      ],
+      notes: ['2 candidates received, 2 passed constraints, top 2 returned.'],
+    };
+
+    const text = formatToolResult('name_project', payload, 'table');
+
+    expect(text).toContain('| Name | Score | Verdict | Badges | Why |');
+    expect(text).toContain('Corda');
+    expect(text).toContain('95');
+    expect(text).toContain('com✓');
+    expect(text).toContain('io?');
+    expect(text).toContain('github✗');
+    expect(text).toContain('partial');
+    expect(text).toContain('no AI-slop patterns; clean pronunciation and typing');
+    expect(text).not.toContain('a third reason that should be cut');
+    expect(text).toContain('2 candidates received, 2 passed constraints, top 2 returned.');
+  });
 });

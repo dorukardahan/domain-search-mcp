@@ -9,6 +9,23 @@ import type {
 
 type OutputFormat = Config['outputFormat'];
 
+interface NameProjectFormatPayload {
+  phase: 1 | 2;
+  instructions?: string;
+  resubmit_hint?: string;
+  shortlist?: Array<{
+    name: string;
+    total: number;
+    reasons: string[];
+    clearance?: {
+      verdict: string;
+      domains: { domain: string; available: boolean | null }[];
+      socials: { platform: string; available: boolean | null }[];
+    };
+  }>;
+  notes?: string[];
+}
+
 type ToolResult =
   | SearchResponse
   | RegistrarComparison
@@ -17,6 +34,7 @@ type ToolResult =
   | { results: { available: DomainResult[]; premium: DomainResult[]; unavailable_count: number }; insights?: string[] }
   | { name: string; results: SocialHandleResult[]; insights?: string[] }
   | TLDInfo
+  | NameProjectFormatPayload
   | Record<string, unknown>;
 
 function formatMoney(value: number | null, currency: string): string {
@@ -227,6 +245,50 @@ function formatTldInfo(result: TLDInfo): string {
   return renderTable(headers, rows);
 }
 
+function availabilityMark(available: boolean | null): string {
+  if (available === true) return '✓';
+  if (available === false) return '✗';
+  return '?';
+}
+
+function formatNameProject(result: NameProjectFormatPayload): string {
+  if (result.phase === 1) {
+    return [result.instructions, result.resubmit_hint]
+      .filter(Boolean)
+      .join('\n\n');
+  }
+
+  const headers = ['Name', 'Score', 'Verdict', 'Badges', 'Why'];
+  const rows = (result.shortlist ?? []).map((entry) => {
+    const badges: string[] = [];
+    if (entry.clearance) {
+      for (const d of entry.clearance.domains) {
+        const tld = d.domain.includes('.')
+          ? d.domain.split('.').slice(1).join('.')
+          : d.domain;
+        badges.push(`${tld}${availabilityMark(d.available)}`);
+      }
+      for (const s of entry.clearance.socials) {
+        badges.push(`${s.platform}${availabilityMark(s.available)}`);
+      }
+    }
+    return [
+      entry.name,
+      entry.total.toString(),
+      entry.clearance?.verdict ?? '-',
+      badges.length > 0 ? badges.join(' ') : '-',
+      entry.reasons.slice(0, 2).join('; ') || '-',
+    ];
+  });
+
+  const sections: string[] = [];
+  sections.push(renderTable(headers, rows));
+  if (result.notes?.length) {
+    sections.push(result.notes.join('\n'));
+  }
+  return sections.join('\n');
+}
+
 function formatSocials(result: { name: string; results: SocialHandleResult[]; insights?: string[] }): string {
   const headers = ['Platform', 'Available', 'Confidence', 'URL'];
   const rows = result.results.map((entry) => [
@@ -282,6 +344,9 @@ export function formatToolResult(
       break;
     case 'check_socials':
       text = formatSocials(typed as { name: string; results: SocialHandleResult[]; insights?: string[] });
+      break;
+    case 'name_project':
+      text = formatNameProject(typed as NameProjectFormatPayload);
       break;
     default:
       text = `Output format not implemented for ${name}. Set OUTPUT_FORMAT=json for raw output.`;

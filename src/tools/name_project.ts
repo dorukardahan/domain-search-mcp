@@ -116,15 +116,26 @@ async function phase2(input: NameProjectInput): Promise<NameProjectResult> {
   const laneKeys = input.lanes ?? DEFAULT_LANES;
   const seed = (input.mode === 'from_name' || input.mode === 'from_domain') && input.name
     ? [input.name.split('.')[0]!] : [];
-  const all = [...new Set([...seed, ...(input.candidates ?? [])])];
+  // Case-insensitive dedup, keeping the first casing seen.
+  const byLowercase = new Map<string, string>();
+  for (const candidate of [...seed, ...(input.candidates ?? [])]) {
+    const key = candidate.toLowerCase();
+    if (!byLowercase.has(key)) byLowercase.set(key, candidate);
+  }
+  const all = [...byLowercase.values()];
 
   const filtered = all.filter((n) =>
     (!input.constraints?.max_length || n.length <= input.constraints.max_length) &&
     (!input.constraints?.must_include || n.toLowerCase().includes(input.constraints.must_include.toLowerCase())),
   );
 
+  // Best-fit lane: score each candidate under every requested lane and keep
+  // the highest-scoring result (its .lane reports the best-fit lane; ties go
+  // to the earlier lane in the request order).
   const scored = filtered
-    .map((n) => scoreName(n, laneKeys[0]))
+    .map((n) => laneKeys
+      .map((lane) => scoreName(n, lane))
+      .reduce((best, cur) => (cur.total > best.total ? cur : best)))
     .sort((a, b) => b.total - a.total);
 
   const wantClearance = !!(input.targets?.tlds?.length || input.targets?.platforms?.length);
