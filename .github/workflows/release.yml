@@ -20,7 +20,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          # npm >= 11.5.1 required for trusted publishing (OIDC); node 24 bundles it
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
       - name: Install deps
@@ -29,10 +30,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Auth via npm Trusted Publishing (GitHub OIDC) - no NPM_TOKEN secret.
+      # Publisher configured on npmjs.com: repo dorukardahan/domain-search-mcp, workflow release.yml.
       - name: Publish (provenance)
         run: npm publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Keeps the MCP registry listing in sync with the npm release.
       # Non-blocking: the registry is in preview and must not fail the npm release.
