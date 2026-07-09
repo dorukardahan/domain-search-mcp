@@ -39,7 +39,7 @@ flowchart TB
     end
 
     subgraph VPS["Production VPS"]
-        HTTPS["https://vmi3000318.contaboserver.net"]
+        HTTPS["https://your-server.example.com"]
     end
 
     CD & CU & VS & PX --> NPX
@@ -234,7 +234,7 @@ flowchart TB
 
     CLIENT -->|HTTPS :443| NGINX
 
-    subgraph VPS["Contabo VPS (95.111.240.197)"]
+    subgraph VPS["Self-hosted inference host"]
         subgraph NGINX_BLOCK["NGINX"]
             NGINX["Reverse Proxy<br/>SSL Termination<br/>Let's Encrypt"]
         end
@@ -261,11 +261,11 @@ flowchart TB
 
 **Production URLs:**
 
-- `https://vmi3000318.contaboserver.net` - Server info
-- `https://vmi3000318.contaboserver.net/mcp` - MCP protocol
-- `https://vmi3000318.contaboserver.net/openapi.json` - OpenAPI spec
-- `https://vmi3000318.contaboserver.net/health` - Health check
-- `https://vmi3000318.contaboserver.net/metrics` - Prometheus metrics
+- `https://your-server.example.com` - Server info
+- `https://your-server.example.com/mcp` - MCP protocol
+- `https://your-server.example.com/openapi.json` - OpenAPI spec
+- `https://your-server.example.com/health` - Health check
+- `https://your-server.example.com/metrics` - Prometheus metrics
 
 ---
 

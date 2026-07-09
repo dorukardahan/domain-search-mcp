@@ -56,14 +56,15 @@ function parseOutputFormat(
  * SECURITY: Validate external URLs to prevent SSRF attacks.
  *
  * Blocks:
- * - localhost and loopback addresses (except for QWEN_INFERENCE_ENDPOINT)
- * - Private network ranges (10.x, 172.16-31.x, 192.168.x)
+ * - localhost/loopback and private ranges (unless allowLocalhost is set)
  * - Link-local addresses (169.254.x)
  * - File URLs and other non-HTTP schemes
- * - HTTP URLs (HTTPS required for security, except trusted endpoints)
+ * - Plain HTTP on public hosts (HTTPS required; loopback/private may use HTTP)
  *
  * @param url - URL to validate
- * @param allowLocalhost - Allow localhost (for inference endpoints only)
+ * @param allowLocalhost - Allow loopback/private hosts. Set for operator-configured
+ *   backend endpoints (QWEN_INFERENCE_ENDPOINT, PRICING_API_BASE_URL,
+ *   NEGATIVE_CACHE_URL) that commonly run on the same machine or LAN.
  */
 function validateExternalUrl(
   url: string | undefined,
@@ -105,7 +106,9 @@ function validateExternalUrl(
       return undefined;
     }
 
-    // Block private network ranges
+    // Block private network ranges (RFC1918 + link-local + IPv6 ULA/link-local).
+    // Exception: when allowLocalhost is set, private ranges are permitted so
+    // self-hosted LAN endpoints (e.g. 192.168.x) stay usable.
     const privateRanges = [
       /^10\./,                          // 10.0.0.0/8
       /^172\.(1[6-9]|2[0-9]|3[01])\./,  // 172.16.0.0/12
@@ -116,23 +119,18 @@ function validateExternalUrl(
       /^fd[0-9a-f]{2}:/i,               // IPv6 unique local (fd00::/8)
     ];
 
-    for (const range of privateRanges) {
-      if (range.test(hostname)) {
-        return undefined;
-      }
+    const isPrivate = privateRanges.some((range) => range.test(hostname));
+    if (isPrivate && !allowLocalhost) {
+      return undefined;
     }
 
-    // P2 FIX: Require HTTPS for external URLs (except localhost for dev)
-    const isLocalhost = forbiddenHosts.includes(hostname);
-    if (parsed.protocol === 'http:' && !isLocalhost) {
-      // Allow HTTP only for known safe external endpoints
-      // Our VPS uses HTTP internally but is accessed via IP
-      const allowedHttpHosts = [
-        '95.111.240.197', // Our inference VPS
-      ];
-      if (!allowedHttpHosts.includes(hostname)) {
-        return undefined;
-      }
+    // P2 FIX: Require HTTPS for public hosts. Plain HTTP is allowed only for
+    // loopback (localhost/127.0.0.1) and private/RFC1918 endpoints — e.g. a
+    // self-hosted inference server at http://127.0.0.1:8070. Public hosts must
+    // use HTTPS; there is no hardcoded HTTP allowlist.
+    const isLoopback = forbiddenHosts.includes(hostname);
+    if (parsed.protocol === 'http:' && !isLoopback && !isPrivate) {
+      return undefined;
     }
 
     return url;
@@ -152,24 +150,26 @@ export function loadConfig(): Config {
   const hasPorkbun = !!(env.PORKBUN_API_KEY && env.PORKBUN_API_SECRET);
   const hasNamecheap = !!(env.NAMECHEAP_API_KEY && env.NAMECHEAP_API_USER);
 
-  // SECURITY: Validate external URLs to prevent SSRF
-  const pricingApiUrl = validateExternalUrl(env.PRICING_API_BASE_URL);
+  // SECURITY: Validate external URLs to prevent SSRF.
+  // allowLocalhost=true: the pricing backend is operator-configured and commonly
+  // runs next to the MCP server (e.g. http://127.0.0.1:3003); public hosts still
+  // require HTTPS to pass validation.
+  const pricingApiUrl = validateExternalUrl(env.PRICING_API_BASE_URL, true);
 
-  // Qwen inference endpoint - allow localhost for local testing
-  // Default to our public VPS for zero-config experience
-  const DEFAULT_QWEN_ENDPOINT = 'http://95.111.240.197:8000';
-  const userQwenEndpoint = env.QWEN_INFERENCE_ENDPOINT;
-  const qwenEndpoint = userQwenEndpoint
-    ? validateExternalUrl(userQwenEndpoint, true) // allowLocalhost=true for user override
-    : DEFAULT_QWEN_ENDPOINT; // Our VPS is always allowed
+  // Qwen inference endpoint - opt-in only, from QWEN_INFERENCE_ENDPOINT.
+  // No default endpoint: AI suggestions require the user to point at their own
+  // inference server. allowLocalhost=true so loopback/private (RFC1918) hosts are
+  // usable for self-hosted setups; public hosts must use HTTPS to pass validation.
+  const qwenEndpoint = validateExternalUrl(env.QWEN_INFERENCE_ENDPOINT, true);
   const hasPricingApi = !!pricingApiUrl;
   const hasQwen = !!qwenEndpoint;
 
   // Together.ai cloud inference (deprecated - kept for backward compatibility)
   const hasTogetherAi = !!env.TOGETHER_API_KEY;
 
-  // SECURITY: Validate negative cache URL to prevent SSRF
-  const negativeCacheUrl = validateExternalUrl(env.NEGATIVE_CACHE_URL);
+  // SECURITY: Validate negative cache URL to prevent SSRF.
+  // allowLocalhost=true for the same self-hosted reason as the pricing backend.
+  const negativeCacheUrl = validateExternalUrl(env.NEGATIVE_CACHE_URL, true);
   const hasNegativeCache = parseBool(env.NEGATIVE_CACHE_ENABLED, false) && !!negativeCacheUrl;
 
   const config: Config = {
@@ -283,7 +283,7 @@ export function hasRegistrarApi(): boolean {
 export function getAvailableSources(): string[] {
   const sources: string[] = [];
   if (config.negativeCache.enabled) sources.push('negative_cache');
-  if (config.qwenInference?.enabled) sources.push('qwen_inference'); // AI suggestions (VPS default)
+  if (config.qwenInference?.enabled) sources.push('qwen_inference'); // AI suggestions (opt-in via QWEN_INFERENCE_ENDPOINT)
   if (config.togetherAi?.enabled) sources.push('together_ai'); // Deprecated BYOK
   if (config.pricingApi.enabled) sources.push('pricing_api');
   if (config.porkbun.enabled) sources.push('porkbun');

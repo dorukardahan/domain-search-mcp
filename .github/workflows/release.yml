@@ -34,6 +34,18 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # Keeps the MCP registry listing in sync with the npm release.
+      # Non-blocking: the registry is in preview and must not fail the npm release.
+      - name: Publish to MCP Registry
+        continue-on-error: true
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          jq --arg v "$VERSION" '.version=$v | .packages[0].version=$v' server.json > server.json.tmp
+          mv server.json.tmp server.json
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+
       - name: Publish release notes
         uses: release-drafter/release-drafter@v6
         with:

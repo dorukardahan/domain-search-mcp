@@ -8,11 +8,18 @@
 
 set -e
 
-VPS_HOST="95.111.240.197"
-VPS_USER="admin"
-SSH_KEY="/tmp/qwen_vps_key"
-LOCAL_PORT="8000"
-REMOTE_PORT="8000"
+# Configure via environment variables (no hardcoded hosts).
+#   VPS_HOST=your.server.example VPS_USER=admin ./tunnel-qwen.sh
+VPS_HOST="${VPS_HOST:-your-inference-host.example}"
+VPS_USER="${VPS_USER:-admin}"
+SSH_KEY="${SSH_KEY:-/tmp/qwen_vps_key}"
+LOCAL_PORT="${LOCAL_PORT:-8000}"
+REMOTE_PORT="${REMOTE_PORT:-8000}"
+
+if [ "$VPS_HOST" = "your-inference-host.example" ]; then
+  echo "Set VPS_HOST to your inference server, e.g. VPS_HOST=your.server ./tunnel-qwen.sh" >&2
+  exit 1
+fi
 
 echo "🔐 Setting up SSH tunnel to Qwen inference server..."
 echo "   Local:  http://localhost:${LOCAL_PORT}"

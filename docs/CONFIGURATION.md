@@ -69,19 +69,20 @@ The server uses a hybrid cache architecture:
 
 ## AI Inference Configuration
 
-AI-powered suggestions (`suggest_domains_smart`) work out of the box using our public VPS running fine-tuned Qwen 7B-DPO. No API keys needed!
+AI-powered suggestions (`suggest_domains_smart`) use your own inference endpoint when configured. Point `QWEN_INFERENCE_ENDPOINT` at a llama.cpp/Qwen server you control. There is no bundled default endpoint.
 
-### Default (Zero-Config)
+### Default (no endpoint configured)
 
-Nothing to configure - just use the tool.
+If `QWEN_INFERENCE_ENDPOINT` is unset, suggestions fall back to the built-in offline semantic engine — no external calls, no API keys needed.
 
 ### Self-Hosted Setup
 
-For custom AI inference:
+For AI inference, point at your own server:
 
 ```bash
 # .env
-QWEN_INFERENCE_ENDPOINT=http://your-server:8000
+# Public hosts must use HTTPS; loopback/private (RFC1918) hosts may use HTTP.
+QWEN_INFERENCE_ENDPOINT=http://127.0.0.1:8070
 QWEN_API_KEY=optional_if_secured
 QWEN_TIMEOUT_MS=15000
 QWEN_MAX_RETRIES=2
@@ -178,7 +179,7 @@ This is a best-effort signal and should be verified at the marketplace link.
 | `AFTERMARKET_NS_ENABLED` | true | Enable nameserver-based aftermarket hints |
 | `AFTERMARKET_NS_TIMEOUT_MS` | 1500 | Nameserver lookup timeout |
 | `REDIS_URL` | - | Redis connection URL for distributed caching |
-| `QWEN_INFERENCE_ENDPOINT` | (public VPS) | Override AI inference endpoint |
+| `QWEN_INFERENCE_ENDPOINT` | (none) | Your own AI inference endpoint (offline semantic fallback if unset) |
 | `QWEN_TIMEOUT_MS` | 15000 | AI inference request timeout |
 | `QWEN_MAX_RETRIES` | 2 | Retry count for AI inference failures |
 | `TOGETHER_API_KEY` | - | Together.ai API key (legacy fallback) |

@@ -175,7 +175,7 @@ export async function executeAiHealth(
       name: 'VPS Qwen (llama.cpp)',
       configured: false,
       status: 'unavailable',
-      message: 'Not configured (set QWEN_API_URL)',
+      message: 'Not configured (set QWEN_INFERENCE_ENDPOINT)',
     });
   }
 

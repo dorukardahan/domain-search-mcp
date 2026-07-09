@@ -9,6 +9,33 @@
 
 export type TransportType = 'stdio' | 'http';
 
+/**
+ * Top-level CLI action requested via flags.
+ * - 'help'    : print usage and exit
+ * - 'version' : print version and exit
+ * - 'run'     : start the MCP server (default)
+ */
+export type CliAction = 'help' | 'version' | 'run';
+
+/**
+ * Parse the top-level CLI action from process args.
+ *
+ * Recognizes --help/-h and --version/-v. Everything else (including transport
+ * flags like --http/--stdio/--port) resolves to 'run'. Kept pure so it can be
+ * unit-tested and invoked before the server touches stdin.
+ *
+ * @param args - Arguments after the node/script path (i.e. process.argv.slice(2)).
+ */
+export function parseCliAction(args: string[]): CliAction {
+  if (args.includes('--help') || args.includes('-h')) {
+    return 'help';
+  }
+  if (args.includes('--version') || args.includes('-v')) {
+    return 'version';
+  }
+  return 'run';
+}
+
 export interface TransportConfig {
   type: TransportType;
   port?: number;

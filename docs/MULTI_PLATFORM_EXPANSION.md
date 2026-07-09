@@ -2,7 +2,7 @@
 
 **Completed:** January 4, 2026
 **Version:** 1.9.1
-**Production:** https://vmi3000318.contaboserver.net
+**Production:** https://your-server.example.com
 
 ---
 
@@ -105,9 +105,9 @@ curl -X POST https://your-domain/api/tools/search_domain \
 
 | Item | Value |
 |------|-------|
-| Server | Contabo VPS (qwen-inference-server) |
-| IP | 95.111.240.197 |
-| Hostname | vmi3000318.contaboserver.net |
+| Server | Self-hosted inference host (example) |
+| IP | (your server's IP) |
+| Hostname | (your server's hostname) |
 | User | admin |
 | Directory | /var/www/domain-mcp |
 
@@ -153,18 +153,18 @@ WantedBy=multi-user.target
 ### SSL Certificate
 
 - Provider: Let's Encrypt via Certbot
-- Domain: vmi3000318.contaboserver.net
+- Domain: your-server.example.com
 - Auto-renewal configured
 
 ### Production Endpoints
 
 | Endpoint | URL |
 |----------|-----|
-| Server Info | https://vmi3000318.contaboserver.net |
-| MCP Protocol | https://vmi3000318.contaboserver.net/mcp |
-| OpenAPI Spec | https://vmi3000318.contaboserver.net/openapi.json |
-| Health Check | https://vmi3000318.contaboserver.net/health |
-| REST API | https://vmi3000318.contaboserver.net/api/tools/* |
+| Server Info | https://your-server.example.com |
+| MCP Protocol | https://your-server.example.com/mcp |
+| OpenAPI Spec | https://your-server.example.com/openapi.json |
+| Health Check | https://your-server.example.com/health |
+| REST API | https://your-server.example.com/api/tools/* |
 
 ---
 

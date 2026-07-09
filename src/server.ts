@@ -28,10 +28,11 @@ import {
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { getTransportConfig, formatTransportInfo } from './transports/index.js';
+import { getTransportConfig, formatTransportInfo, parseCliAction } from './transports/index.js';
 import { createHttpTransport } from './transports/http.js';
 
 import { config, getAvailableSources, hasRegistrarApi } from './config.js';
+import { getServerVersion } from './utils/version.js';
 import { logger, generateRequestId, setRequestId, clearRequestId } from './utils/logger.js';
 import { wrapError, DomainSearchError } from './utils/errors.js';
 import { formatToolResult, formatToolError } from './utils/format.js';
@@ -66,8 +67,9 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SERVER_NAME = 'domain-search-mcp';
-// NOTE: Keep in sync with package.json version
-const SERVER_VERSION = '1.9.8';
+// Resolved from package.json at runtime so it never drifts from the published version.
+const SERVER_VERSION = getServerVersion();
+const REPO_URL = 'https://github.com/dorukardahan/domain-search-mcp';
 
 /**
  * All available tools.
@@ -233,6 +235,63 @@ async function executeToolCall(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CLI (handled before the server boots or reads stdin)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Print usage/help to stdout.
+ */
+function printHelp(): void {
+  const lines = [
+    `domain-search-mcp v${SERVER_VERSION}`,
+    '',
+    'Zero-config domain availability MCP server for Claude, ChatGPT, and other',
+    'MCP clients. Availability is checked locally via RDAP/WHOIS; optional live',
+    'pricing and AI suggestions are added when the matching endpoints are set.',
+    '',
+    'Usage:',
+    '  domain-search-mcp [--stdio | --http [--port <n>]]',
+    '  domain-search-mcp --help | --version',
+    '',
+    'Tools:',
+    ...TOOLS.map((t) => `  ${t.name}`),
+    '',
+    'Transport flags:',
+    '  --stdio         Use stdio transport (default; Claude Desktop, Cursor, VS Code)',
+    '  --http          Use HTTP/SSE transport (ChatGPT, web clients, LM Studio)',
+    '  --port <n>      HTTP port (implies --http; default 3000)',
+    '',
+    'Key environment variables:',
+    '  PRICING_API_BASE_URL       Backend URL for live pricing (recommended)',
+    '  QWEN_INFERENCE_ENDPOINT    Your own AI inference endpoint for suggestions',
+    '  PORKBUN_API_KEY            BYOK Porkbun pricing (with PORKBUN_API_SECRET)',
+    '  NAMECHEAP_API_KEY          BYOK Namecheap pricing (with NAMECHEAP_API_USER)',
+    '  MCP_TRANSPORT / MCP_PORT / MCP_HOST   Transport configuration via env',
+    '',
+    `Repository: ${REPO_URL}`,
+  ];
+  process.stdout.write(`${lines.join('\n')}\n`);
+}
+
+/**
+ * Handle --help/-h and --version/-v before any server/stdin work.
+ * Exits the process when a flag is handled; returns otherwise.
+ */
+function handleCliFlags(): void {
+  const action = parseCliAction(process.argv.slice(2));
+
+  if (action === 'help') {
+    printHelp();
+    process.exit(0);
+  }
+
+  if (action === 'version') {
+    process.stdout.write(`${SERVER_VERSION}\n`);
+    process.exit(0);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Startup
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -240,6 +299,9 @@ async function executeToolCall(
  * Main entry point.
  */
 async function main(): Promise<void> {
+  // Handle informational CLI flags first — never block on stdin for --help/--version.
+  handleCliFlags();
+
   // Get transport configuration from CLI args and env vars
   const transportConfig = getTransportConfig();
 
