@@ -1,13 +1,22 @@
 /** Distance from everyday vocabulary. Wordlist ships in the package (data/). */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { logger } from '../utils/logger.js';
 
 let COMMON: Set<string> | null = null;
 function commonWords(): Set<string> {
   if (!COMMON) {
     // dist/naming/ -> package root is two levels up (same pattern as utils/version.ts)
     const p = join(__dirname, '..', '..', 'data', 'common-words.json');
-    COMMON = new Set(JSON.parse(readFileSync(p, 'utf8')) as string[]);
+    try {
+      COMMON = new Set(JSON.parse(readFileSync(p, 'utf8')) as string[]);
+    } catch (error) {
+      logger.warn('Could not read bundled wordlist; distinctiveness checks degraded', {
+        path: p,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      COMMON = new Set();
+    }
   }
   return COMMON;
 }
@@ -16,7 +25,6 @@ function withinOneEdit(a: string, dict: Set<string>): string | null {
   // deletions + substitutions + insertions of length-neighbors; a is short (<20)
   for (const w of dict) {
     if (Math.abs(w.length - a.length) > 1) continue;
-    if (w[0] !== a[0]) continue; // cheap prefilter: brands rarely shadow on first letter change
     if (editDistanceLeq1(a, w)) return w;
   }
   return null;

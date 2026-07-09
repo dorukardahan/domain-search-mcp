@@ -8,7 +8,9 @@ tsconfig.json
 # Source TypeScript (publish compiled JS only)
 src/
 
-# Large data files
+# Large data files (bundle only the wordlist, not generated datasets)
+data/*
+!data/common-words.json
 training/
 cache-backend/
 

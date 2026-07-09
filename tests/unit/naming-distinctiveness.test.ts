@@ -13,4 +13,14 @@ describe('distinctivenessScore', () => {
     expect(shadow.score).toBeLessThan(distinctivenessScore('corda').score);
     expect(shadow.notes.join(' ')).toMatch(/close to/i);
   });
+  it('catches shadows that differ in the first letter (substitution)', () => {
+    const shadow = distinctivenessScore('gouse'); // house with first letter swapped
+    expect(shadow.notes.join(' ')).toMatch(/close to/i);
+    expect(shadow.score).toBeLessThan(60);
+  });
+  it('catches shadows created by a leading insertion', () => {
+    const shadow = distinctivenessScore('ihouse'); // house with a letter prepended
+    expect(shadow.notes.join(' ')).toMatch(/close to/i);
+    expect(shadow.score).toBeLessThan(60);
+  });
 });
