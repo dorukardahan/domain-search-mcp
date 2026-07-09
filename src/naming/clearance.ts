@@ -24,15 +24,40 @@ export async function clearName(name: string, targets: ClearanceTargets = {}): P
       : Promise.resolve(null),
   ]);
 
-  const domains = domainsRes?.results.map((r) => ({
+  const domains: ClearanceReport['domains'] = domainsRes?.results.map((r) => ({
     domain: r.domain, available: r.available ?? null, price_first_year: r.price_first_year ?? null,
   })) ?? [];
-  const socials = socialsRes?.results.map((s) => ({ platform: s.platform, available: s.available ?? null })) ?? [];
+  // searchDomain swallows per-TLD failures (failed TLDs are omitted from results,
+  // the promise still resolves). Backfill every requested-but-missing TLD as
+  // unknown so silently unchecked surfaces can never read as cleared.
+  if (domainsRes && wantDomains) {
+    const seen = new Set(domains.map((d) => d.domain.toLowerCase()));
+    for (const tld of targets.tlds ?? []) {
+      const fqdn = `${name}.${tld}`;
+      if (!seen.has(fqdn.toLowerCase())) {
+        domains.push({ domain: fqdn, available: null, price_first_year: null });
+      }
+    }
+  }
+
+  // Same degradation for socials: a result carrying an error is an unchecked
+  // surface (its boolean is a guess, e.g. "assume taken"), and per-platform
+  // failures may be dropped from results entirely.
+  const socials: ClearanceReport['socials'] = socialsRes?.results.map((s) => ({
+    platform: s.platform, available: s.error ? null : (s.available ?? null),
+  })) ?? [];
+  if (socialsRes && wantSocials) {
+    const seen = new Set(socials.map((s) => s.platform));
+    for (const platform of targets.platforms ?? []) {
+      if (!seen.has(platform)) socials.push({ platform, available: null });
+    }
+  }
 
   const checks = [...domains.map((d) => d.available), ...socials.map((s) => s.available)];
   let verdict: ClearanceReport['verdict'];
   if (failed && checks.length === 0) verdict = 'unknown';
   else if (checks.length === 0) verdict = 'cleared';           // nothing requested
+  else if (checks.every((c) => c === null)) verdict = 'unknown'; // nothing actually checked
   else if (checks.every((c) => c === true)) verdict = 'cleared';
   else if (checks.every((c) => c === false)) verdict = 'taken';
   else verdict = 'partial';
