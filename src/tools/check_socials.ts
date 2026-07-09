@@ -409,7 +409,7 @@ async function checkPlatform(
 /**
  * Response format for social checks.
  */
-interface CheckSocialsResponse {
+export interface CheckSocialsResponse {
   name: string;
   results: SocialHandleResult[];
   summary: {
