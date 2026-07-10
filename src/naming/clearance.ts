@@ -6,7 +6,7 @@ export interface ClearanceTargets { tlds?: string[]; platforms?: string[]; }
 export interface ClearanceReport {
   name: string;
   verdict: 'cleared' | 'partial' | 'taken' | 'unknown';
-  domains: { domain: string; available: boolean | null; price_first_year: number | null }[];
+  domains: { domain: string; available: boolean | null; price_first_year: number | null; premium?: boolean }[];
   socials: { platform: string; available: boolean | null }[];
 }
 
@@ -25,7 +25,7 @@ export async function clearName(name: string, targets: ClearanceTargets = {}): P
   ]);
 
   const domains: ClearanceReport['domains'] = domainsRes?.results.map((r) => ({
-    domain: r.domain, available: r.available ?? null, price_first_year: r.price_first_year ?? null,
+    domain: r.domain, available: r.available ?? null, price_first_year: r.price_first_year ?? null, premium: r.premium,
   })) ?? [];
   // searchDomain swallows per-TLD failures (failed TLDs are omitted from results,
   // the promise still resolves). Backfill every requested-but-missing TLD as
@@ -58,7 +58,12 @@ export async function clearName(name: string, targets: ClearanceTargets = {}): P
     }
   }
 
-  const checks = [...domains.map((d) => d.available), ...socials.map((s) => s.available)];
+  // A premium/aftermarket-available domain is available for purchase but not
+  // free - it must not read as "cleared". Treat available:true + premium:true
+  // as not-free (like false) for verdict purposes only; the entry itself
+  // keeps available:true + premium:true so UIs can still render "for sale".
+  const domainChecks = domains.map((d) => (d.available === true && d.premium ? false : d.available));
+  const checks = [...domainChecks, ...socials.map((s) => s.available)];
   let verdict: ClearanceReport['verdict'];
   if (failed && checks.length === 0) verdict = 'unknown';
   else if (checks.length === 0) verdict = 'cleared';           // nothing requested

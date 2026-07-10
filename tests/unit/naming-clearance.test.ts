@@ -78,4 +78,31 @@ describe('clearName', () => {
     expect(r.socials).toEqual([{ platform: 'github', available: null }]);
     expect(r.verdict).toBe('unknown');
   });
+  it('premium-available domain is not-free for verdict purposes: com free + ai premium-available => partial', async () => {
+    (searchDomain as jest.Mock).mockResolvedValueOnce({
+      results: [
+        { domain: 'corda.com', available: true, price_first_year: 11.08 },
+        { domain: 'corda.ai', available: true, price_first_year: 2999, premium: true },
+      ],
+      insights: [], next_steps: [],
+    });
+    const r = await clearName('corda', { tlds: ['com', 'ai'] });
+    expect(r.verdict).toBe('partial');
+    expect(r.domains).toContainEqual({ domain: 'corda.ai', available: true, price_first_year: 2999, premium: true });
+  });
+  it('all requested domains premium-available (not-free everywhere) => verdict taken', async () => {
+    (searchDomain as jest.Mock).mockResolvedValueOnce({
+      results: [
+        { domain: 'corda.com', available: true, price_first_year: 2999, premium: true },
+        { domain: 'corda.ai', available: true, price_first_year: 3999, premium: true },
+      ],
+      insights: [], next_steps: [],
+    });
+    const r = await clearName('corda', { tlds: ['com', 'ai'] });
+    expect(r.verdict).toBe('taken');
+    expect(r.domains).toEqual([
+      { domain: 'corda.com', available: true, price_first_year: 2999, premium: true },
+      { domain: 'corda.ai', available: true, price_first_year: 3999, premium: true },
+    ]);
+  });
 });
