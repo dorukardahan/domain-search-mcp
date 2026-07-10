@@ -78,7 +78,7 @@ interface NameProjectResponse {
     clearance?: {                // present only when `targets` was provided
       name: string;
       verdict: "cleared" | "partial" | "taken" | "unknown";
-      domains: { domain: string; available: boolean | null; price_first_year: number | null }[];
+      domains: { domain: string; available: boolean | null; price_first_year: number | null; premium?: boolean }[];
       socials: { platform: string; available: boolean | null }[];
     };
   }>;
@@ -150,6 +150,13 @@ No `targets` were provided in this example, so `clearance` is omitted from each 
 entry and no domain/social/npm lookups ran. Availability checks only run on the top-12
 shortlist when `targets.tlds` or `targets.platforms` is set — this protects registries/social platforms from
 being hit for every raw candidate.
+
+When formatted as a table (`OUTPUT_FORMAT=table`/`both`), the Badges column renders `tld✓` free
+to register, `tld$` for sale (`available: true` + `premium: true` - aftermarket or registrar-premium,
+registered or priced, not free to register), `tld✗` taken, `tld?` unknown.
+ccTLD checks for `.ai` / `.io` / `.sh` / `.ac` are cross-checked against native WHOIS/DNS ground
+truth rather than trusted from RDAP alone, since RDAP 404s on these registries can mean either
+"free" or "premium/reserved" (see `UNRELIABLE_RDAP_TLDS` in `src/fallbacks/rdap.ts`).
 
 ---
 

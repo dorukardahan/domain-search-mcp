@@ -20,7 +20,7 @@ interface NameProjectFormatPayload {
     reasons: string[];
     clearance?: {
       verdict: string;
-      domains: { domain: string; available: boolean | null }[];
+      domains: { domain: string; available: boolean | null; premium?: boolean }[];
       socials: { platform: string; available: boolean | null }[];
     };
   }>;
@@ -246,7 +246,11 @@ function formatTldInfo(result: TLDInfo): string {
   return renderTable(headers, rows);
 }
 
-function availabilityMark(available: boolean | null): string {
+function availabilityMark(available: boolean | null, premium?: boolean): string {
+  // available+premium means for-sale/priced (aftermarket or registrar premium
+  // listing) - it is NOT free to register, so it must never render as the
+  // free-checkmark state. Render it as its own badge instead.
+  if (available === true && premium) return '$';
   if (available === true) return '✓';
   if (available === false) return '✗';
   return '?';
@@ -267,7 +271,7 @@ function formatNameProject(result: NameProjectFormatPayload): string {
         const tld = d.domain.includes('.')
           ? d.domain.split('.').slice(1).join('.')
           : d.domain;
-        badges.push(`${tld}${availabilityMark(d.available)}`);
+        badges.push(`${tld}${availabilityMark(d.available, d.premium)}`);
       }
       for (const s of entry.clearance.socials) {
         badges.push(`${s.platform}${availabilityMark(s.available)}`);

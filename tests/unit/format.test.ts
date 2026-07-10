@@ -109,6 +109,38 @@ describe('formatToolResult', () => {
     expect(text).toContain('2 candidates received, 2 passed constraints, top 2 returned.');
   });
 
+  it('renders the FOR-SALE badge for available+premium domains, not the free checkmark', () => {
+    const payload = {
+      phase: 2,
+      mode: 'brief',
+      shortlist: [
+        {
+          name: 'Verdict',
+          lane: 'evocative',
+          total: 80,
+          band: 'strong',
+          breakdown: { slop: 100, phonaesthetics: 90, distinctiveness: 80 },
+          reasons: ['clean pronunciation and typing'],
+          clearance: {
+            name: 'Verdict',
+            verdict: 'partial',
+            domains: [
+              { domain: 'verdict.ai', available: true, price_first_year: null, premium: true },
+              { domain: 'verdict.com', available: true, price_first_year: 11 },
+            ],
+            socials: [],
+          },
+        },
+      ],
+    };
+
+    const text = formatToolResult('name_project', payload, 'table');
+
+    expect(text).toContain('ai$');
+    expect(text).not.toContain('ai✓');
+    expect(text).toContain('com✓');
+  });
+
   it('shows the score band next to the numeric score (fake-precision guard)', () => {
     const payload = {
       phase: 2,

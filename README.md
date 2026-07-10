@@ -227,6 +227,9 @@ Rules: single words or tight compounds, no taglines, no explanations yet. Then c
 No availability-check targets - pure naming mode.
 ```
 
+Badges: `tld✓` free to register, `tld$` for sale (aftermarket/premium - registered or priced, not free to register), `tld✗` taken, `tld?` unknown.
+ccTLD checks (`.ai` / `.io` / `.sh` / `.ac`) are cross-checked against native WHOIS/DNS ground truth, not taken on RDAP's word alone.
+
 See [docs/API.md](docs/API.md#name_project) for the full parameter/response schema.
 
 ### Core Search
