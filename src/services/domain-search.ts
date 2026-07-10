@@ -39,6 +39,7 @@ import {
 } from '../registrars/index.js';
 import { checkRdap, isRdapAvailable } from '../fallbacks/rdap.js';
 import { checkWhois, isWhoisAvailable } from '../fallbacks/whois.js';
+import { gateGodaddyAvailability } from '../fallbacks/godaddy-ns-gate.js';
 import { reportTakenDomains } from './negative-cache.js';
 import { fetchPricingQuote, fetchPricingCompare } from './pricing-api.js';
 import type {
@@ -328,6 +329,13 @@ async function searchSingleDomain(
     try {
       const result = await trySource(domain, tld, source);
       if (result) {
+        // Ground-truth gate: GoDaddy's public endpoint reports "available"
+        // for purchasable domains, including aftermarket/parked listings.
+        // Cross-check against live DNS NS records before this result funnels
+        // any further (covers both the search and bulk paths, since both
+        // route through this function). No-ops for non-GoDaddy sources.
+        await gateGodaddyAvailability(result);
+
         await applyPricingQuote(result, pricingBudget);
         // Calculate quality score
         result.score = calculateDomainScore(result);
