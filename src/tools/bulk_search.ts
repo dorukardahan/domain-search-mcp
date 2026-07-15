@@ -129,11 +129,15 @@ export async function executeBulkSearch(
           );
         }
       }
-    } else {
-      insights.push(`❌ All ${domains.length} domains are taken`);
-      insights.push(
-        '💡 Try different variations or alternative TLDs',
-      );
+    } else if (taken.length > 0) {
+      // Report only the count actually confirmed taken — errored checks are
+      // unknown, not registered, and must not be folded into this message.
+      const scope =
+        taken.length === domains.length
+          ? `All ${domains.length}`
+          : `${taken.length} of ${domains.length}`;
+      insights.push(`❌ ${scope} domains are taken`);
+      insights.push('💡 Try different variations or alternative TLDs');
     }
 
     if (errored.length > 0) {

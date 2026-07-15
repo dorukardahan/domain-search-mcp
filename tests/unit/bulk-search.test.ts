@@ -74,5 +74,33 @@ describe('executeBulkSearch - failure surfacing', () => {
     expect(res.summary.errors).toBe(2);
     expect(res.summary.taken).toBe(0);
     expect(res.results).toHaveLength(2);
+    // An all-error batch must NOT claim the domains are taken.
+    expect(res.insights.some((i) => i.includes('are taken'))).toBe(false);
+  });
+
+  it('does not fold errored domains into the "taken" message', async () => {
+    mockBulk.mockResolvedValue([
+      makeResult('taken.com', { available: false }),
+      makeResult('oops.com', { source: 'error', error: 'rate limit' }),
+    ]);
+
+    const res = await executeBulkSearch({
+      domains: ['taken', 'oops'],
+      tld: 'com',
+    });
+
+    expect(res.summary).toEqual({
+      total: 2,
+      available: 0,
+      taken: 1,
+      errors: 1,
+    });
+    // Exactly one confirmed-taken, so the message must say "1 of 2", never "All".
+    expect(res.insights.some((i) => i.includes('1 of 2 domains are taken'))).toBe(
+      true,
+    );
+    expect(res.insights.some((i) => i.includes('All 2 domains are taken'))).toBe(
+      false,
+    );
   });
 });
