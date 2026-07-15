@@ -100,8 +100,11 @@ export async function executeBulkSearch(
 
     const results = await bulkSearchDomains(domains, tld, registrar);
 
-    const available = results.filter((r) => r.available);
-    const taken = results.filter((r) => !r.available);
+    // Errored checks carry `error` and must not be counted as "taken" — a
+    // failed lookup is unknown, not registered.
+    const errored = results.filter((r) => r.error);
+    const available = results.filter((r) => !r.error && r.available);
+    const taken = results.filter((r) => !r.error && !r.available);
 
     const insights: string[] = [];
 
@@ -133,6 +136,14 @@ export async function executeBulkSearch(
       );
     }
 
+    if (errored.length > 0) {
+      insights.push(
+        `⚠️ ${errored.length} domain(s) could not be checked (rate limit or timeout) — re-run to retry: ${errored
+          .map((r) => r.domain)
+          .join(', ')}`,
+      );
+    }
+
     insights.push(
       '⚠️ Prices can change. Verify at registrar checkout links before purchase.',
     );
@@ -143,7 +154,7 @@ export async function executeBulkSearch(
         total: domains.length,
         available: available.length,
         taken: taken.length,
-        errors: domains.length - results.length,
+        errors: errored.length,
       },
       insights,
     };

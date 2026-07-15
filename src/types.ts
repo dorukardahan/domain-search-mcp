@@ -86,6 +86,13 @@ export interface DomainResult {
 
   /** Days until expiration (calculated) */
   days_until_expiration?: number;
+
+  /**
+   * Error message when the check failed (rate limit, timeout, all sources
+   * exhausted). When set, `available` is not meaningful — treat the domain as
+   * "unknown", not "taken".
+   */
+  error?: string;
 }
 
 /**
@@ -100,7 +107,8 @@ export type DataSource =
   | 'whois'
   | 'pricing_api'
   | 'catalog'
-  | 'cache';
+  | 'cache'
+  | 'error';
 
 /**
  * Pricing data origin (can differ from availability source).
@@ -304,6 +312,13 @@ export interface Config {
 
   // Rate limiting
   rateLimitPerMinute: number;
+
+  /**
+   * Max domains checked concurrently by bulk_search. Kept conservative so a
+   * batch stays under downstream registrar rate limits (e.g. GoDaddy ~30/min)
+   * and doesn't trip their circuit breakers. Override with BULK_CONCURRENCY.
+   */
+  bulkConcurrency: number;
 
   // TLD restrictions
   allowedTlds: string[];

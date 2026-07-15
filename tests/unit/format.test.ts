@@ -161,4 +161,35 @@ describe('formatToolResult', () => {
 
     expect(text).toContain('86 strong');
   });
+
+  it('labels a failed check as Error, not Taken', () => {
+    const errored: DomainResult = {
+      domain: 'oops.com',
+      available: false,
+      premium: false,
+      price_first_year: null,
+      price_renewal: null,
+      currency: 'USD',
+      privacy_included: false,
+      transfer_price: null,
+      registrar: 'unknown',
+      source: 'error',
+      checked_at: new Date().toISOString(),
+      error: 'rate limit',
+    };
+
+    const payload: SearchResponse = {
+      results: [errored],
+      insights: [],
+      next_steps: [],
+      from_cache: false,
+      duration_ms: 1,
+    };
+
+    const text = formatToolResult('search_domain', payload, 'table');
+
+    expect(text).toContain('oops.com');
+    expect(text).toContain('Error');
+    expect(text).not.toContain('Taken');
+  });
 });

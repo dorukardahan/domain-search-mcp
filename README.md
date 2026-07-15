@@ -319,6 +319,7 @@ QWEN_API_KEY=optional_if_secured
 | `PRICING_API_MAX_QUOTES_SEARCH` | 0 | Max pricing calls per search (0 = unlimited; backend rate limits apply) |
 | `PRICING_API_MAX_QUOTES_BULK` | 0 | Max pricing calls per bulk search (0 = unlimited; backend rate limits apply) |
 | `PRICING_API_CONCURRENCY` | 4 | Pricing request concurrency |
+| `BULK_CONCURRENCY` | 5 | Max domains checked in parallel by `bulk_search`. Kept conservative so a batch stays under downstream registrar rate limits (e.g. GoDaddy ~30/min); raise it if your sources tolerate more |
 | `PORKBUN_API_KEY` | - | Porkbun API key |
 | `PORKBUN_API_SECRET` | - | Porkbun API secret |
 | `NAMECHEAP_API_KEY` | - | Namecheap API key |

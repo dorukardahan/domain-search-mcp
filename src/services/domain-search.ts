@@ -60,7 +60,6 @@ import { lookupSedoAuction } from '../aftermarket/sedo.js';
 import { lookupAftermarketByNameserver } from '../aftermarket/nameservers.js';
 
 const SEARCH_TLD_CONCURRENCY = 10;
-const BULK_CONCURRENCY = 20;
 const CACHE_TTL_AVAILABLE_MS = config.cache.availabilityTtl * 1000;
 const CACHE_TTL_TAKEN_MS = config.cache.availabilityTtl * 2000;
 
@@ -848,13 +847,39 @@ function generateNextSteps(results: DomainResult[]): string[] {
 }
 
 /**
+ * Build a placeholder result for a domain whose check failed. `error` carries
+ * the reason and `source` is 'error', so callers can tell a failed check apart
+ * from a genuine "taken" result (both have available === false).
+ */
+function buildErrorResult(
+  domain: string,
+  tld: string,
+  message: string,
+): DomainResult {
+  return {
+    domain: domain.includes('.') ? domain : `${domain}.${tld}`,
+    available: false,
+    premium: false,
+    price_first_year: null,
+    price_renewal: null,
+    currency: 'USD',
+    privacy_included: false,
+    transfer_price: null,
+    registrar: 'unknown',
+    source: 'error',
+    checked_at: new Date().toISOString(),
+    error: message,
+  };
+}
+
+/**
  * Bulk search for multiple domains.
  */
 export async function bulkSearchDomains(
   domains: string[],
   tld: string = 'com',
   registrar?: string,
-  maxConcurrent: number = BULK_CONCURRENCY,
+  maxConcurrent: number = config.bulkConcurrency,
 ): Promise<DomainResult[]> {
   const startTime = Date.now();
   const results: DomainResult[] = [];
@@ -883,17 +908,17 @@ export async function bulkSearchDomains(
         );
         return result;
       } catch (error) {
-        logger.warn(`Failed to check ${domain}.${tld}`, {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return null;
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`Failed to check ${domain}.${tld}`, { error: message });
+        // Surface the failure instead of silently dropping the domain, so the
+        // caller sees exactly which names couldn't be checked (and can retry)
+        // rather than receiving a short list with no explanation.
+        return buildErrorResult(domain, tld, message);
       }
     });
 
     const batchResults = await Promise.all(batchPromises);
-    for (const result of batchResults) {
-      if (result) results.push(result);
-    }
+    results.push(...batchResults);
   }
 
   const duration = Date.now() - startTime;
