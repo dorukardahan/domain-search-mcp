@@ -1,8 +1,11 @@
 import { searchDomain } from '../services/domain-search.js';
 import { executeCheckSocials } from '../tools/check_socials.js';
-import { logger } from '../utils/logger.js';
+import { logger, withLoggerSuppressed } from '../utils/logger.js';
 
 export interface ClearanceTargets { tlds?: string[]; platforms?: string[]; }
+export type ClearanceOptions = Readonly<{
+  logPolicy?: 'default' | 'suppress';
+}>;
 export interface ClearanceReport {
   name: string;
   verdict: 'cleared' | 'partial' | 'taken' | 'unknown';
@@ -10,7 +13,7 @@ export interface ClearanceReport {
   socials: { platform: string; available: boolean | null }[];
 }
 
-export async function clearName(name: string, targets: ClearanceTargets = {}): Promise<ClearanceReport> {
+async function runClearance(name: string, targets: ClearanceTargets): Promise<ClearanceReport> {
   const wantDomains = !!targets.tlds?.length;
   const wantSocials = !!targets.platforms?.length;
   let failed = false;
@@ -73,4 +76,15 @@ export async function clearName(name: string, targets: ClearanceTargets = {}): P
   else verdict = 'partial';
 
   return { name, verdict, domains, socials };
+}
+
+export async function clearName(
+  name: string,
+  targets: ClearanceTargets = {},
+  options: ClearanceOptions = {},
+): Promise<ClearanceReport> {
+  const operation = () => runClearance(name, targets);
+  return options.logPolicy === 'suppress'
+    ? withLoggerSuppressed(operation)
+    : operation();
 }

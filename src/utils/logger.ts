@@ -6,6 +6,7 @@
  * - Includes request IDs for tracing
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { config } from '../config.js';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -82,6 +83,16 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 3,
 };
 
+const suppressionScope = new AsyncLocalStorage<boolean>();
+
+/**
+ * Suppress package logger output only within the enclosed operation.
+ * AsyncLocalStorage keeps concurrent request contexts isolated.
+ */
+export function withLoggerSuppressed<T>(operation: () => T): T {
+  return suppressionScope.run(true, operation);
+}
+
 /**
  * Should this level be logged?
  */
@@ -117,6 +128,7 @@ function log(
   message: string,
   data?: Record<string, unknown>,
 ): void {
+  if (suppressionScope.getStore() === true) return;
   if (!shouldLog(level)) return;
 
   const entry: LogEntry = {
