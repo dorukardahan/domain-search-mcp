@@ -16,6 +16,7 @@ jest.mock('../../src/tools/check_socials', () => ({
 import { clearName } from '../../src/naming/clearance';
 import { searchDomain } from '../../src/services/domain-search';
 import { executeCheckSocials } from '../../src/tools/check_socials';
+import { logger } from '../../src/utils/logger';
 
 describe('clearName', () => {
   it('merges domain and social checks into one report', async () => {
@@ -104,5 +105,58 @@ describe('clearName', () => {
       { domain: 'corda.com', available: true, price_first_year: 2999, premium: true },
       { domain: 'corda.ai', available: true, price_first_year: 3999, premium: true },
     ]);
+  });
+
+  it('suppresses nested source logs when explicitly requested', async () => {
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    (searchDomain as jest.Mock).mockImplementationOnce(async (name: string, tlds: string[]) => {
+      logger.warn('domain source protected trace', { domain: `${name}.${tlds[0]}` });
+      return {
+        results: [{ domain: `${name}.${tlds[0]}`, available: true, price_first_year: 11.08 }],
+        insights: [], next_steps: [],
+      };
+    });
+    (executeCheckSocials as jest.Mock).mockImplementationOnce(async ({ name }: { name: string }) => {
+      await Promise.resolve();
+      logger.warn('social source protected trace', { name });
+      return {
+        results: [
+          { platform: 'github', handle: name, available: true, url: '', checked_at: '', confidence: 'high' },
+        ],
+      };
+    });
+
+    try {
+      const report = await clearName(
+        'protected-product-name',
+        { tlds: ['com'], platforms: ['github'] },
+        { logPolicy: 'suppress' },
+      );
+
+      expect(report.verdict).toBe('cleared');
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
+  it('preserves default nested source logging when suppression is not requested', async () => {
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    (searchDomain as jest.Mock).mockImplementationOnce(async (name: string, tlds: string[]) => {
+      logger.warn('domain source default trace', { domain: `${name}.${tlds[0]}` });
+      return {
+        results: [{ domain: `${name}.${tlds[0]}`, available: true, price_first_year: 11.08 }],
+        insights: [], next_steps: [],
+      };
+    });
+
+    try {
+      await clearName('ordinary-product-name', { tlds: ['com'] });
+
+      expect(stderr).toHaveBeenCalledTimes(1);
+      expect(stderr.mock.calls.flat().join('\n')).toContain('ordinary-product-name.com');
+    } finally {
+      stderr.mockRestore();
+    }
   });
 });
