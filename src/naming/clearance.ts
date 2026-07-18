@@ -2,6 +2,7 @@ import { searchDomain } from '../services/domain-search.js';
 import { executeCheckSocials } from '../tools/check_socials.js';
 import { logger, withLoggerSuppressed } from '../utils/logger.js';
 
+export const CLEARANCE_LOG_POLICY_VERSION = 1 as const;
 export interface ClearanceTargets { tlds?: string[]; platforms?: string[]; }
 export type ClearanceOptions = Readonly<{
   logPolicy?: 'default' | 'suppress';
