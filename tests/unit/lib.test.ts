@@ -11,6 +11,7 @@ describe('library entry (src/lib)', () => {
     const lib = require('../../src/lib');
     expect(typeof lib.scoreName).toBe('function');
     expect(typeof lib.clearName).toBe('function');
+    expect(lib.CLEARANCE_LOG_POLICY_VERSION).toBe(1);
     expect(Array.isArray(lib.LANES)).toBe(true);
   });
 });

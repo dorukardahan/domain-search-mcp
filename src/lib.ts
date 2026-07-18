@@ -13,7 +13,7 @@ export type {
   SocialPlatform,
 } from './types.js';
 export { scoreName } from './naming/scorer.js';
-export { clearName } from './naming/clearance.js';
+export { CLEARANCE_LOG_POLICY_VERSION, clearName } from './naming/clearance.js';
 export type { ClearanceOptions, ClearanceReport, ClearanceTargets } from './naming/clearance.js';
 export { LANES, getLane } from './naming/lanes.js';
 export { slopPenalty } from './naming/slop-filter.js';
