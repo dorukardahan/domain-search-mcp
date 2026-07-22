@@ -134,6 +134,12 @@ describe('clearName', () => {
       );
 
       expect(report.verdict).toBe('cleared');
+      expect(searchDomain).toHaveBeenLastCalledWith(
+        'protected-product-name',
+        ['com'],
+        undefined,
+        { reportTaken: false },
+      );
       expect(stderr).not.toHaveBeenCalled();
     } finally {
       stderr.mockRestore();

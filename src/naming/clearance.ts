@@ -14,14 +14,23 @@ export interface ClearanceReport {
   socials: { platform: string; available: boolean | null }[];
 }
 
-async function runClearance(name: string, targets: ClearanceTargets): Promise<ClearanceReport> {
+async function runClearance(
+  name: string,
+  targets: ClearanceTargets,
+  reportTaken: boolean = true,
+): Promise<ClearanceReport> {
   const wantDomains = !!targets.tlds?.length;
   const wantSocials = !!targets.platforms?.length;
   let failed = false;
 
   const [domainsRes, socialsRes] = await Promise.all([
     wantDomains
-      ? searchDomain(name, targets.tlds).catch((e) => { failed = true; logger.warn('clearance: domain check failed', { error: String(e) }); return null; })
+      ? searchDomain(
+          name,
+          targets.tlds,
+          undefined,
+          reportTaken ? undefined : { reportTaken: false },
+        ).catch((e) => { failed = true; logger.warn('clearance: domain check failed', { error: String(e) }); return null; })
       : Promise.resolve(null),
     wantSocials
       ? executeCheckSocials({ name, platforms: targets.platforms as never }).catch((e) => { failed = true; logger.warn('clearance: socials check failed', { error: String(e) }); return null; })
@@ -84,8 +93,9 @@ export async function clearName(
   targets: ClearanceTargets = {},
   options: ClearanceOptions = {},
 ): Promise<ClearanceReport> {
-  const operation = () => runClearance(name, targets);
-  return options.logPolicy === 'suppress'
+  const suppressProtectedOutput = options.logPolicy === 'suppress';
+  const operation = () => runClearance(name, targets, !suppressProtectedOutput);
+  return suppressProtectedOutput
     ? withLoggerSuppressed(operation)
     : operation();
 }
