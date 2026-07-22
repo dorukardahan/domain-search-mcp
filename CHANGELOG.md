@@ -9,6 +9,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 - -
 
+## [1.12.3] - 2026-07-22
+### Added
+- Request-scoped log suppression for protected clearance operations.
+- A versioned clearance log-policy capability for programmatic consumers.
+
 ## [1.9.8] - 2026-01-05
 ### Fixed
 - **CRITICAL**: Fixed false positives for .ai TLD (domains reported as "available" when actually registered)
