@@ -17,6 +17,7 @@ import { clearName } from '../../src/naming/clearance';
 import { searchDomain } from '../../src/services/domain-search';
 import { executeCheckSocials } from '../../src/tools/check_socials';
 import { logger } from '../../src/utils/logger';
+import { TtlCache } from '../../src/utils/cache';
 
 describe('clearName', () => {
   it('merges domain and social checks into one report', async () => {
@@ -109,8 +110,10 @@ describe('clearName', () => {
 
   it('suppresses nested source logs when explicitly requested', async () => {
     const stderr = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const protectedCache = new TtlCache<string>(60);
     (searchDomain as jest.Mock).mockImplementationOnce(async (name: string, tlds: string[]) => {
       logger.error('domain source protected trace', { domain: `${name}.${tlds[0]}` });
+      protectedCache.set(`domain:${name}.${tlds[0]}`, 'secret');
       return {
         results: [{ domain: `${name}.${tlds[0]}`, available: true, price_first_year: 11.08 }],
         insights: [], next_steps: [],
@@ -119,6 +122,7 @@ describe('clearName', () => {
     (executeCheckSocials as jest.Mock).mockImplementationOnce(async ({ name }: { name: string }) => {
       await Promise.resolve();
       logger.error('social source protected trace', { name });
+      protectedCache.set(`social:${name}`, 'secret');
       return {
         results: [
           { platform: 'github', handle: name, available: true, url: '', checked_at: '', confidence: 'high' },
@@ -138,10 +142,12 @@ describe('clearName', () => {
         'protected-product-name',
         ['com'],
         undefined,
-        { cacheResults: false, reportTaken: false },
+        { reportTaken: false },
       );
+      expect(protectedCache.size).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
     } finally {
+      protectedCache.destroy();
       stderr.mockRestore();
     }
   });

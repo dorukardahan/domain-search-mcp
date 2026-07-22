@@ -1,5 +1,6 @@
 import { searchDomain } from '../services/domain-search.js';
 import { executeCheckSocials } from '../tools/check_socials.js';
+import { withCacheWritesSuppressed } from '../utils/cache.js';
 import { logger, withLoggerSuppressed } from '../utils/logger.js';
 
 export const CLEARANCE_LOG_POLICY_VERSION = 1 as const;
@@ -29,7 +30,7 @@ async function runClearance(
           name,
           targets.tlds,
           undefined,
-          reportTaken ? undefined : { cacheResults: false, reportTaken: false },
+          reportTaken ? undefined : { reportTaken: false },
         ).catch((e) => { failed = true; logger.warn('clearance: domain check failed', { error: String(e) }); return null; })
       : Promise.resolve(null),
     wantSocials
@@ -96,6 +97,6 @@ export async function clearName(
   const suppressProtectedOutput = options.logPolicy === 'suppress';
   const operation = () => runClearance(name, targets, !suppressProtectedOutput);
   return suppressProtectedOutput
-    ? withLoggerSuppressed(operation)
+    ? withLoggerSuppressed(() => withCacheWritesSuppressed(operation))
     : operation();
 }
