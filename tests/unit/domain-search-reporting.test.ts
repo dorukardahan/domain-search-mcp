@@ -67,10 +67,20 @@ describe('searchDomain taken-domain reporting policy', () => {
     infoSpy.mockRestore();
   });
 
-  it('does not report a taken domain when reporting is disabled for the search', async () => {
-    await searchDomain('protected-candidate', ['com'], undefined, { reportTaken: false });
+  it('does not retain or report a taken domain when shared-state writes are disabled', async () => {
+    await searchDomain('protected-candidate', ['com'], undefined, {
+      cacheResults: false,
+      reportTaken: false,
+    });
 
     expect(reportTakenDomains).not.toHaveBeenCalled();
+    expect(domainCache.size).toBe(0);
+
+    await searchDomain('protected-candidate', ['com']);
+
+    expect(reportTakenDomains).toHaveBeenCalledWith([
+      expect.objectContaining({ fqdn: 'protected-candidate.com', source: 'rdap' }),
+    ]);
   });
 
   it('keeps taken-domain reporting enabled by default', async () => {

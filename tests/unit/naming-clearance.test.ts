@@ -138,7 +138,7 @@ describe('clearName', () => {
         'protected-product-name',
         ['com'],
         undefined,
-        { reportTaken: false },
+        { cacheResults: false, reportTaken: false },
       );
       expect(stderr).not.toHaveBeenCalled();
     } finally {
