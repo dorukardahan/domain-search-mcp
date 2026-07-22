@@ -2,7 +2,13 @@
  * Unit Tests for TTL Cache.
  */
 
-import { TtlCache, domainCacheKey, tldCacheKey, getOrCompute } from '../../src/utils/cache';
+import {
+  TtlCache,
+  domainCacheKey,
+  getOrCompute,
+  tldCacheKey,
+  withCacheWritesSuppressed,
+} from '../../src/utils/cache';
 
 describe('TtlCache', () => {
   let cache: TtlCache<string>;
@@ -64,6 +70,34 @@ describe('TtlCache', () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     expect(cache.get('key1')).toBeUndefined();
+  });
+
+  it('suppresses async cache writes without affecting concurrent ordinary work', async () => {
+    let releaseSuppressed!: () => void;
+    let suppressedStarted!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseSuppressed = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      suppressedStarted = resolve;
+    });
+
+    const suppressed = withCacheWritesSuppressed(async () => {
+      cache.set('protected-before-await', 'secret');
+      suppressedStarted();
+      await gate;
+      cache.set('protected-after-await', 'secret');
+    });
+
+    await started;
+    cache.set('ordinary-concurrent', 'visible');
+    releaseSuppressed();
+    await suppressed;
+
+    expect(cache.get('protected-before-await')).toBeUndefined();
+    expect(cache.get('protected-after-await')).toBeUndefined();
+    expect(cache.get('ordinary-concurrent')).toBe('visible');
+    expect(cache.size).toBe(1);
   });
 });
 

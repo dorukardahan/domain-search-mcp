@@ -48,7 +48,7 @@ jest.mock('../../src/aftermarket/nameservers', () => ({
 import { config } from '../../src/config';
 import { searchDomain } from '../../src/services/domain-search';
 import { reportTakenDomains } from '../../src/services/negative-cache';
-import { domainCache } from '../../src/utils/cache';
+import { domainCache, withCacheWritesSuppressed } from '../../src/utils/cache';
 import { logger } from '../../src/utils/logger';
 
 describe('searchDomain taken-domain reporting policy', () => {
@@ -68,10 +68,9 @@ describe('searchDomain taken-domain reporting policy', () => {
   });
 
   it('does not retain or report a taken domain when shared-state writes are disabled', async () => {
-    await searchDomain('protected-candidate', ['com'], undefined, {
-      cacheResults: false,
-      reportTaken: false,
-    });
+    await withCacheWritesSuppressed(() =>
+      searchDomain('protected-candidate', ['com'], undefined, { reportTaken: false }),
+    );
 
     expect(reportTakenDomains).not.toHaveBeenCalled();
     expect(domainCache.size).toBe(0);

@@ -5,8 +5,19 @@
  * Reduces API calls and improves response times.
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { config } from '../config.js';
 import { logger } from './logger.js';
+
+const cacheWriteSuppressionScope = new AsyncLocalStorage<boolean>();
+
+/**
+ * Suppress all TtlCache writes only within the enclosed operation.
+ * AsyncLocalStorage keeps concurrent request contexts isolated.
+ */
+export function withCacheWritesSuppressed<T>(operation: () => T): T {
+  return cacheWriteSuppressionScope.run(true, operation);
+}
 
 interface CacheEntry<T> {
   value: T;
@@ -77,6 +88,8 @@ export class TtlCache<T> {
    * Implements LRU eviction when cache is at capacity.
    */
   set(key: string, value: T, ttlMs?: number): void {
+    if (cacheWriteSuppressionScope.getStore() === true) return;
+
     const now = Date.now();
     const expiresAt = now + (ttlMs ?? this.defaultTtlMs);
 
