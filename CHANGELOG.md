@@ -13,7 +13,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 - Request-scoped log suppression for protected clearance operations.
 - A versioned clearance log-policy capability for programmatic consumers.
-- Protected clearance operations do not report taken names to the federated negative cache.
+- Protected clearance operations neither cache results nor report taken names to the federated negative cache.
 
 ## [1.9.8] - 2026-01-05
 ### Fixed

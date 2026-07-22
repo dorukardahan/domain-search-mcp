@@ -76,6 +76,8 @@ type PricingBudget = {
 
 type SearchOptions = {
   pricing?: PricingOptions;
+  /** Disable local result-cache writes for protected lookups. */
+  cacheResults?: boolean;
   /** Disable best-effort reporting to the federated negative-cache backend. */
   reportTaken?: boolean;
 };
@@ -225,6 +227,7 @@ export async function searchDomain(
   const normalizedDomain = validateDomainName(domainName);
   const normalizedTlds = validateTlds(tlds);
   const pricingBudget = createPricingBudget(options?.pricing);
+  const cacheResults = options?.cacheResults ?? true;
   const reportTaken = options?.reportTaken ?? true;
 
   logger.info('Domain search started', {
@@ -248,6 +251,7 @@ export async function searchDomain(
             tld,
             preferredRegistrars,
             pricingBudget,
+            cacheResults,
             reportTaken,
           );
           if (result.fromCache) fromCache = true;
@@ -303,6 +307,7 @@ async function searchSingleDomain(
   tld: string,
   preferredRegistrars?: string[],
   pricingBudget?: PricingBudget,
+  cacheResults: boolean = true,
   reportTaken: boolean = true,
 ): Promise<{ result: DomainResult; fromCache: boolean }> {
   const fullDomain = buildDomain(domain, tld);
@@ -356,7 +361,7 @@ async function searchSingleDomain(
         // Cache the result
         const cacheKey = domainCacheKey(fullDomain, result.source);
         const ttlMs = result.available ? CACHE_TTL_AVAILABLE_MS : CACHE_TTL_TAKEN_MS;
-        domainCache.set(cacheKey, result, ttlMs);
+        if (cacheResults) domainCache.set(cacheKey, result, ttlMs);
 
         // Report taken domains to federated negative cache
         if (reportTaken && !result.available && config.negativeCache.enabled) {

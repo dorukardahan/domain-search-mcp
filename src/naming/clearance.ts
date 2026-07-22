@@ -29,7 +29,7 @@ async function runClearance(
           name,
           targets.tlds,
           undefined,
-          reportTaken ? undefined : { reportTaken: false },
+          reportTaken ? undefined : { cacheResults: false, reportTaken: false },
         ).catch((e) => { failed = true; logger.warn('clearance: domain check failed', { error: String(e) }); return null; })
       : Promise.resolve(null),
     wantSocials
