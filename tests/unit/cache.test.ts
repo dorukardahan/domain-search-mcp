@@ -7,7 +7,7 @@ import {
   domainCacheKey,
   getOrCompute,
   tldCacheKey,
-  withCacheWritesSuppressed,
+  withCacheSuppressed,
 } from '../../src/utils/cache';
 
 describe('TtlCache', () => {
@@ -72,7 +72,7 @@ describe('TtlCache', () => {
     expect(cache.get('key1')).toBeUndefined();
   });
 
-  it('suppresses async cache writes without affecting concurrent ordinary work', async () => {
+  it('bypasses async cache reads and writes without affecting concurrent ordinary work', async () => {
     let releaseSuppressed!: () => void;
     let suppressedStarted!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -82,7 +82,10 @@ describe('TtlCache', () => {
       suppressedStarted = resolve;
     });
 
-    const suppressed = withCacheWritesSuppressed(async () => {
+    cache.set('preexisting-protected', 'cached-secret');
+
+    const suppressed = withCacheSuppressed(async () => {
+      expect(cache.get('preexisting-protected')).toBeUndefined();
       cache.set('protected-before-await', 'secret');
       suppressedStarted();
       await gate;
@@ -96,8 +99,9 @@ describe('TtlCache', () => {
 
     expect(cache.get('protected-before-await')).toBeUndefined();
     expect(cache.get('protected-after-await')).toBeUndefined();
+    expect(cache.get('preexisting-protected')).toBe('cached-secret');
     expect(cache.get('ordinary-concurrent')).toBe('visible');
-    expect(cache.size).toBe(1);
+    expect(cache.size).toBe(2);
   });
 });
 

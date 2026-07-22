@@ -1,6 +1,6 @@
 import { searchDomain } from '../services/domain-search.js';
 import { executeCheckSocials } from '../tools/check_socials.js';
-import { withCacheWritesSuppressed } from '../utils/cache.js';
+import { withCacheSuppressed } from '../utils/cache.js';
 import { logger, withLoggerSuppressed } from '../utils/logger.js';
 
 export const CLEARANCE_LOG_POLICY_VERSION = 1 as const;
@@ -97,6 +97,6 @@ export async function clearName(
   const suppressProtectedOutput = options.logPolicy === 'suppress';
   const operation = () => runClearance(name, targets, !suppressProtectedOutput);
   return suppressProtectedOutput
-    ? withLoggerSuppressed(() => withCacheWritesSuppressed(operation))
+    ? withLoggerSuppressed(() => withCacheSuppressed(operation))
     : operation();
 }

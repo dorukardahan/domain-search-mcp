@@ -9,14 +9,14 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { config } from '../config.js';
 import { logger } from './logger.js';
 
-const cacheWriteSuppressionScope = new AsyncLocalStorage<boolean>();
+const cacheSuppressionScope = new AsyncLocalStorage<boolean>();
 
 /**
- * Suppress all TtlCache writes only within the enclosed operation.
+ * Bypass all TtlCache reads and writes only within the enclosed operation.
  * AsyncLocalStorage keeps concurrent request contexts isolated.
  */
-export function withCacheWritesSuppressed<T>(operation: () => T): T {
-  return cacheWriteSuppressionScope.run(true, operation);
+export function withCacheSuppressed<T>(operation: () => T): T {
+  return cacheSuppressionScope.run(true, operation);
 }
 
 interface CacheEntry<T> {
@@ -59,6 +59,8 @@ export class TtlCache<T> {
    * Moves entry to end of Map for O(1) LRU tracking via insertion order.
    */
   get(key: string): T | undefined {
+    if (cacheSuppressionScope.getStore() === true) return undefined;
+
     const entry = this.cache.get(key);
 
     if (!entry) {
@@ -88,7 +90,7 @@ export class TtlCache<T> {
    * Implements LRU eviction when cache is at capacity.
    */
   set(key: string, value: T, ttlMs?: number): void {
-    if (cacheWriteSuppressionScope.getStore() === true) return;
+    if (cacheSuppressionScope.getStore() === true) return;
 
     const now = Date.now();
     const expiresAt = now + (ttlMs ?? this.defaultTtlMs);
