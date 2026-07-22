@@ -76,6 +76,8 @@ type PricingBudget = {
 
 type SearchOptions = {
   pricing?: PricingOptions;
+  /** Disable best-effort reporting to the federated negative-cache backend. */
+  reportTaken?: boolean;
 };
 
 
@@ -223,6 +225,7 @@ export async function searchDomain(
   const normalizedDomain = validateDomainName(domainName);
   const normalizedTlds = validateTlds(tlds);
   const pricingBudget = createPricingBudget(options?.pricing);
+  const reportTaken = options?.reportTaken ?? true;
 
   logger.info('Domain search started', {
     domain: normalizedDomain,
@@ -245,6 +248,7 @@ export async function searchDomain(
             tld,
             preferredRegistrars,
             pricingBudget,
+            reportTaken,
           );
           if (result.fromCache) fromCache = true;
           return { success: true as const, tld, result: result.result };
@@ -299,6 +303,7 @@ async function searchSingleDomain(
   tld: string,
   preferredRegistrars?: string[],
   pricingBudget?: PricingBudget,
+  reportTaken: boolean = true,
 ): Promise<{ result: DomainResult; fromCache: boolean }> {
   const fullDomain = buildDomain(domain, tld);
   const triedSources: string[] = [];
@@ -354,7 +359,7 @@ async function searchSingleDomain(
         domainCache.set(cacheKey, result, ttlMs);
 
         // Report taken domains to federated negative cache
-        if (!result.available && config.negativeCache.enabled) {
+        if (reportTaken && !result.available && config.negativeCache.enabled) {
           reportTakenDomains([{
             fqdn: result.domain,
             expires_at: result.expires_at,
