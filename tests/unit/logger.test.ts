@@ -13,11 +13,11 @@ describe('withLoggerSuppressed', () => {
 
   it('suppresses logger output for a synchronous operation only', () => {
     const result = withLoggerSuppressed(() => {
-      logger.warn('protected sync candidate', { domain: 'secret-root.com' });
+      logger.error('protected sync candidate', { domain: 'secret-root.com' });
       return 42;
     });
 
-    logger.warn('normal operation resumed');
+    logger.error('normal operation resumed');
 
     expect(result).toBe(42);
     expect(stderr).toHaveBeenCalledTimes(1);
@@ -27,9 +27,9 @@ describe('withLoggerSuppressed', () => {
 
   it('keeps logger output suppressed across asynchronous boundaries', async () => {
     await withLoggerSuppressed(async () => {
-      logger.warn('protected before await', { name: 'private-candidate' });
+      logger.error('protected before await', { name: 'private-candidate' });
       await Promise.resolve();
-      logger.warn('protected after await', { domain: 'private-candidate.com' });
+      logger.error('protected after await', { domain: 'private-candidate.com' });
     });
 
     expect(stderr).not.toHaveBeenCalled();
@@ -43,7 +43,7 @@ describe('withLoggerSuppressed', () => {
       throw failure;
     })).rejects.toBe(failure);
 
-    logger.warn('normal logging after rejection');
+    logger.error('normal logging after rejection');
 
     expect(stderr).toHaveBeenCalledTimes(1);
     const output = stderr.mock.calls.flat().join('\n');
@@ -62,14 +62,14 @@ describe('withLoggerSuppressed', () => {
     });
 
     const suppressed = withLoggerSuppressed(async () => {
-      logger.warn('protected concurrent start', { name: 'concurrent-secret' });
+      logger.error('protected concurrent start', { name: 'concurrent-secret' });
       suppressedStarted();
       await suppressedGate;
-      logger.warn('protected concurrent end', { domain: 'concurrent-secret.com' });
+      logger.error('protected concurrent end', { domain: 'concurrent-secret.com' });
     });
 
     await started;
-    logger.warn('visible concurrent operation');
+    logger.error('visible concurrent operation');
     releaseSuppressed();
     await suppressed;
 

@@ -110,7 +110,7 @@ describe('clearName', () => {
   it('suppresses nested source logs when explicitly requested', async () => {
     const stderr = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     (searchDomain as jest.Mock).mockImplementationOnce(async (name: string, tlds: string[]) => {
-      logger.warn('domain source protected trace', { domain: `${name}.${tlds[0]}` });
+      logger.error('domain source protected trace', { domain: `${name}.${tlds[0]}` });
       return {
         results: [{ domain: `${name}.${tlds[0]}`, available: true, price_first_year: 11.08 }],
         insights: [], next_steps: [],
@@ -118,7 +118,7 @@ describe('clearName', () => {
     });
     (executeCheckSocials as jest.Mock).mockImplementationOnce(async ({ name }: { name: string }) => {
       await Promise.resolve();
-      logger.warn('social source protected trace', { name });
+      logger.error('social source protected trace', { name });
       return {
         results: [
           { platform: 'github', handle: name, available: true, url: '', checked_at: '', confidence: 'high' },
@@ -143,7 +143,7 @@ describe('clearName', () => {
   it('preserves default nested source logging when suppression is not requested', async () => {
     const stderr = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     (searchDomain as jest.Mock).mockImplementationOnce(async (name: string, tlds: string[]) => {
-      logger.warn('domain source default trace', { domain: `${name}.${tlds[0]}` });
+      logger.error('domain source default trace', { domain: `${name}.${tlds[0]}` });
       return {
         results: [{ domain: `${name}.${tlds[0]}`, available: true, price_first_year: 11.08 }],
         insights: [], next_steps: [],
