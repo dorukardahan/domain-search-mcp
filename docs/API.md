@@ -158,6 +158,38 @@ ccTLD checks for `.ai` / `.io` / `.sh` / `.ac` are cross-checked against native 
 truth rather than trusted from RDAP alone, since RDAP 404s on these registries can mean either
 "free" or "premium/reserved" (see `UNRELIABLE_RDAP_TLDS` in `src/fallbacks/rdap.ts`).
 
+### Domain evidence library API
+
+Programmatic consumers can resolve normalized observations from multiple
+registrars without starting an MCP transport:
+
+```typescript
+import {
+  resolveDomainClearance,
+  type DomainClearanceObservation,
+} from "domain-search-mcp";
+
+const observations: DomainClearanceObservation[] = [{
+  provider: "namecom",
+  domain: "rootnote.com",
+  evidenceLevel: "registrar_quote",
+  available: true,
+  premium: false,
+  priceFirstYear: 12.99,
+  priceRenewal: 18.99,
+  currency: "USD",
+  checkedAt: "2026-07-23T12:00:00.000Z",
+}];
+
+const result = resolveDomainClearance("rootnote.com", observations);
+```
+
+Only an explicit non-premium `registrar_quote` can produce `free`.
+Boolean-only positive availability and registry signals remain `unknown`;
+premium inventory becomes `for_sale`; contradictory exact evidence fails
+closed to `unknown` with `conflict: true`. `checkedAt` must be a canonical UTC
+timestamp produced by `Date.prototype.toISOString()`.
+
 ---
 
 ## search_domain

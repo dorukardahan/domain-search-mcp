@@ -47,6 +47,18 @@ function normalizeDomain(domain: string): string {
   return domain.trim().toLocaleLowerCase('en-US').replace(/\.$/u, '');
 }
 
+function isCanonicalUtcTimestamp(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)) {
+    return false;
+  }
+
+  const timestamp = Date.parse(value);
+  return (
+    Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString() === value
+  );
+}
+
 function isValidObservation(
   observation: DomainClearanceObservation,
   domain: string,
@@ -55,7 +67,7 @@ function isValidObservation(
     PROVIDER_IDS.has(observation.provider) &&
     EVIDENCE_LEVELS.has(observation.evidenceLevel) &&
     normalizeDomain(observation.domain) === domain &&
-    Number.isFinite(Date.parse(observation.checkedAt))
+    isCanonicalUtcTimestamp(observation.checkedAt)
   );
 }
 
@@ -82,25 +94,45 @@ function newestByProvider(
 ): readonly Readonly<DomainClearanceObservation>[] {
   const newest = new Map<
     DomainClearanceProviderId,
-    Readonly<DomainClearanceObservation>
+    {
+      checkedAtMs: number;
+      observations: Map<string, Readonly<DomainClearanceObservation>>;
+    }
   >();
 
   for (const observation of observations) {
     if (!isValidObservation(observation, domain)) continue;
     const immutable = immutableObservation(observation, domain);
     const current = newest.get(immutable.provider);
-    if (
-      !current ||
-      Date.parse(immutable.checkedAt) > Date.parse(current.checkedAt)
-    ) {
-      newest.set(immutable.provider, immutable);
+    const checkedAtMs = Date.parse(immutable.checkedAt);
+    const signature = JSON.stringify(immutable);
+
+    if (!current || checkedAtMs > current.checkedAtMs) {
+      newest.set(immutable.provider, {
+        checkedAtMs,
+        observations: new Map([[signature, immutable]]),
+      });
+    } else if (checkedAtMs === current.checkedAtMs) {
+      current.observations.set(signature, immutable);
     }
   }
 
   return Object.freeze(
-    [...newest.values()].sort((left, right) =>
-      left.provider.localeCompare(right.provider, 'en-US'),
-    ),
+    [...newest.values()]
+      .flatMap(({ observations: tied }) => [...tied.values()])
+      .sort((left, right) => {
+        const providerDifference = left.provider.localeCompare(
+          right.provider,
+          'en-US',
+        );
+        return (
+          providerDifference ||
+          JSON.stringify(left).localeCompare(
+            JSON.stringify(right),
+            'en-US',
+          )
+        );
+      }),
   );
 }
 
