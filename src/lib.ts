@@ -15,6 +15,16 @@ export type {
 export { scoreName } from './naming/scorer.js';
 export { CLEARANCE_LOG_POLICY_VERSION, clearName } from './naming/clearance.js';
 export type { ClearanceOptions, ClearanceReport, ClearanceTargets } from './naming/clearance.js';
+export {
+  DOMAIN_CLEARANCE_PROVIDER_IDS,
+  resolveDomainClearance,
+} from './naming/domain-evidence.js';
+export type {
+  DomainClearanceObservation,
+  DomainClearanceProviderId,
+  DomainEvidenceLevel,
+  ResolvedDomainClearance,
+} from './naming/domain-evidence.js';
 export { LANES, getLane } from './naming/lanes.js';
 export { slopPenalty } from './naming/slop-filter.js';
 export { phonaestheticScore } from './naming/phonaesthetics.js';
