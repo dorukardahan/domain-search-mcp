@@ -38,6 +38,18 @@ describe('resolveDomainClearance', () => {
     });
   });
 
+  it('accepts exact evidence from the existing Namecheap adapter', () => {
+    expect(
+      resolveDomainClearance('rootnote.com', [
+        observation({ provider: 'namecheap' }),
+      ]),
+    ).toMatchObject({
+      status: 'free',
+      primaryProvider: 'namecheap',
+      conflict: false,
+    });
+  });
+
   it('keeps a boolean-only positive registrar result unknown', () => {
     expect(
       resolveDomainClearance('rootnote.com', [

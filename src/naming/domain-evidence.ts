@@ -1,5 +1,6 @@
 export const DOMAIN_CLEARANCE_PROVIDER_IDS = [
   'namecom',
+  'namecheap',
   'godaddy',
   'porkbun',
   'vercel',
