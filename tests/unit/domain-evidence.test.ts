@@ -1,43 +1,11 @@
-type ProviderId =
-  | 'namecom'
-  | 'godaddy'
-  | 'porkbun'
-  | 'vercel'
-  | 'spaceship'
-  | 'rdap'
-  | 'whois';
+import type {
+  DomainClearanceObservation as Observation,
+  ResolvedDomainClearance as Resolution,
+} from '../../src/lib';
 
-type EvidenceLevel =
-  | 'registrar_quote'
-  | 'registrar_availability'
-  | 'registry_signal';
-
-interface Observation {
-  provider: ProviderId;
-  domain: string;
-  evidenceLevel: EvidenceLevel;
-  available: boolean | null;
-  premium: boolean | null;
-  priceFirstYear: number | null;
-  priceRenewal: number | null;
-  currency: string | null;
-  checkedAt: string;
-}
-
-interface Resolution {
-  domain: string;
-  status: 'free' | 'taken' | 'for_sale' | 'unknown';
-  primaryProvider: ProviderId | null;
-  observations: readonly Observation[];
-  conflict: boolean;
-}
-
-const { resolveDomainClearance } = require('../../src/lib') as {
-  resolveDomainClearance(
-    domain: string,
-    observations: readonly Observation[],
-  ): Resolution;
-};
+const { resolveDomainClearance } = require('../../src/lib') as typeof import(
+  '../../src/lib'
+);
 
 const CHECKED_AT = '2026-07-23T12:00:00.000Z';
 
@@ -196,6 +164,25 @@ describe('resolveDomainClearance', () => {
     });
   });
 
+  it.each([
+    '2026-02-30T12:00:00.000Z',
+    'July 23, 2026 12:00:00',
+    '2026-07-23T12:00:00Z',
+    '2026-07-23T14:00:00.000+02:00',
+  ])('discards non-canonical or impossible timestamp %s', (checkedAt) => {
+    expect(
+      resolveDomainClearance('rootnote.com', [
+        observation({ checkedAt }),
+      ]),
+    ).toEqual({
+      domain: 'rootnote.com',
+      status: 'unknown',
+      primaryProvider: null,
+      observations: [],
+      conflict: false,
+    });
+  });
+
   it('keeps only the newest observation from the same provider', () => {
     const result = resolveDomainClearance('rootnote.com', [
       observation({
@@ -225,6 +212,31 @@ describe('resolveDomainClearance', () => {
     expect(result.domain).toBe('rootnote.com');
     expect(result.observations[0]?.domain).toBe('rootnote.com');
     expect(result.status).toBe('free');
+  });
+
+  it('fails closed independent of input order for tied provider evidence', () => {
+    const free = observation();
+    const taken = observation({
+      available: false,
+      premium: null,
+      priceFirstYear: null,
+      priceRenewal: null,
+      currency: null,
+    });
+
+    const forward: Resolution = resolveDomainClearance(
+      'rootnote.com',
+      [free, taken],
+    );
+    const reversed = resolveDomainClearance('rootnote.com', [taken, free]);
+
+    expect(forward).toEqual(reversed);
+    expect(forward).toMatchObject({
+      status: 'unknown',
+      primaryProvider: null,
+      conflict: true,
+    });
+    expect(forward.observations).toHaveLength(2);
   });
 
   it('returns an immutable result and cloned observations', () => {
