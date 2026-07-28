@@ -1,46 +1,39 @@
 # Release Workflow
 
-Use this flow to publish safely and keep MCP clients stable.
+Releases are published only by the tag-triggered GitHub Actions workflow. Never
+run `npm publish` or change npm dist-tags from a local machine.
 
-## Checklist
+## Prepare the release
 
-- Bump versions in `package.json`, `package-lock.json`, and `server.json`.
-- Update `CHANGELOG.md` (add a new version section).
-- Run `npm run test` (or at least `npm run build`).
-- Ensure GitHub secret `NPM_TOKEN` is set (used by CI).
-- Label PRs so Release Drafter can generate clean notes (see below).
-- Confirm no secrets are included in the package (`npm pack --dry-run` if needed).
+1. Bump the version in `package.json`, `package-lock.json`, and `server.json`.
+2. Add the release section to `CHANGELOG.md`.
+3. Run the full test suite and build.
+4. Inspect `npm pack --dry-run` and verify that no secrets or local-only files
+   enter the package.
+5. Open a focused, non-draft pull request and wait for CI and review.
+6. Merge the pull request before creating the version tag.
 
-## Canary Publish (Local)
+## Publish through GitHub Actions
 
-Publish a canary build for quick validation:
-
-```bash
-npm run release:canary
-```
-
-Smoke test the canary in a local MCP client. If it behaves correctly, promote it.
-
-## Promote to Latest (Local)
+After the release commit is present on `main`, create and push the matching tag:
 
 ```bash
-npm run release:promote-latest
+git switch main
+git pull --ff-only
+git tag v1.13.0
+git push origin v1.13.0
 ```
 
-Or publish directly as latest:
+The release workflow uses npm trusted publishing through GitHub OIDC. It does
+not use an `NPM_TOKEN`. The workflow builds the package, publishes it with
+provenance, updates the MCP Registry, and publishes the drafted GitHub release.
 
-```bash
-npm run release:latest
-```
+After the workflow completes, verify:
 
-## CI Release (Recommended)
-
-Create a git tag and push it. CI will publish with provenance and create a GitHub Release:
-
-```bash
-git tag v1.2.24
-git push origin v1.2.24
-```
+- the workflow is green;
+- npm shows the expected version and provenance;
+- the GitHub release points to the expected tag and commit;
+- the MCP Registry shows the expected version.
 
 ## Release Drafter Labels
 
@@ -58,6 +51,5 @@ Use `skip-changelog` to exclude a PR from release notes.
 ## Notes
 
 - CI publishes with `--provenance` for supply-chain integrity.
-- Local scripts use `--provenance` if supported; otherwise publish without provenance.
-- Prefer canary first for risky changes (protocol updates, new tool outputs).
+- Never publish locally, even for canary builds.
 - If a release is bad, use `npm deprecate` and promote the previous version.

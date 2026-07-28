@@ -20,6 +20,7 @@
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '..', '..');
@@ -63,6 +64,22 @@ describe('npm pack invariants (93MB dataset near-miss guard)', () => {
     },
     PACK_TEST_TIMEOUT_MS,
   );
+});
+
+describe('runtime compatibility invariants', () => {
+  it('keeps the MCP SDK on the Node 18-compatible v1.29 line', () => {
+    const packageJson = JSON.parse(
+      readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'),
+    ) as {
+      engines: { node: string };
+      dependencies: Record<string, string>;
+    };
+
+    expect(packageJson.engines.node).toBe('>=18.0.0');
+    expect(packageJson.dependencies['@modelcontextprotocol/sdk']).toBe(
+      '~1.29.0',
+    );
+  });
 });
 
 describe('loadConfig — zero-default-egress (scrubbed env)', () => {
