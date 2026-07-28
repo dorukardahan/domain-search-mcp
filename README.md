@@ -410,8 +410,9 @@ npm run build     # compile to dist/
 
 ## Release
 
-See `docs/RELEASE.md` for the canary -> latest publish flow. Tags like `v1.2.24`
-trigger GitHub Releases + npm publish via CI.
+See `docs/RELEASE.md` for the tag-triggered release flow. Version tags trigger
+the GitHub Release, npm trusted publishing with provenance, and MCP Registry
+publication through GitHub Actions.
 
 ## Changelog
 

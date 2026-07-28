@@ -226,6 +226,7 @@ export class AdaptiveConcurrencyLimiter {
     this.evaluationTimer = setInterval(() => {
       this.evaluate();
     }, this.evaluationIntervalMs);
+    this.evaluationTimer.unref();
   }
 
   private evaluate(): void {

@@ -9,6 +9,22 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 - -
 
+## [1.13.0] - 2026-07-28
+### Added
+- A provider-neutral domain-clearance observation contract and conservative resolver for programmatic consumers.
+- Normalized evidence support for Name.com, Namecheap, GoDaddy, Porkbun, Vercel, Spaceship, RDAP, and WHOIS.
+
+### Changed
+- Conflicting, incomplete, malformed, or registry-only domain evidence now resolves to `unknown` instead of overstating availability.
+- The MCP SDK is pinned to its Node.js 18-compatible v1.29 patch line while this package supports Node.js 18.
+- Release documentation now requires the tag-triggered GitHub Actions workflow with npm trusted publishing.
+
+### Fixed
+- Adaptive-concurrency evaluation timers no longer keep importing Node.js processes alive.
+
+### Security
+- Updated the locked `fast-uri` and `body-parser` dependency trees to their patched versions.
+
 ## [1.12.3] - 2026-07-22
 ### Added
 - Request-scoped log suppression for protected clearance operations.

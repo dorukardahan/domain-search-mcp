@@ -26,7 +26,6 @@ module.exports = {
       'ts-jest',
       {
         useESM: false,
-        isolatedModules: true,
       },
     ],
   },
