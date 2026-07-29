@@ -5,6 +5,7 @@
  */
 export { searchDomain } from './services/domain-search.js';
 export { executeCheckSocials, checkSocialsSchema } from './tools/check_socials.js';
+export type { CheckSocialsOptions } from './tools/check_socials.js';
 export { executeBulkSearch } from './tools/bulk_search.js';
 export type {
   DomainResult,

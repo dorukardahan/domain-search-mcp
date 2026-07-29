@@ -284,6 +284,7 @@ Example:
 async function checkPlatform(
   username: string,
   platform: SocialPlatform,
+  signal?: AbortSignal,
 ): Promise<SocialHandleResult> {
   const config = PLATFORM_CONFIGS[platform];
   const url = config.url.replace('{}', username);
@@ -319,6 +320,7 @@ async function checkPlatform(
         ...config.headers,
       },
       maxRedirects: 0,
+      signal,
     });
 
     // Handle rate limiting (429) - return uncertain instead of false negative
@@ -379,6 +381,9 @@ async function checkPlatform(
 
     return result;
   } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
     logger.debug(`Failed to check ${platform}`, {
       username,
       error: error instanceof Error ? error.message : String(error),
@@ -420,6 +425,11 @@ export interface CheckSocialsResponse {
   insights: string[];
 }
 
+export interface CheckSocialsOptions {
+  /** Cancels in-flight platform requests. */
+  signal?: AbortSignal;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Main Execution
 // ═══════════════════════════════════════════════════════════════════════════
@@ -429,8 +439,10 @@ export interface CheckSocialsResponse {
  */
 export async function executeCheckSocials(
   input: CheckSocialsInput,
+  options: CheckSocialsOptions = {},
 ): Promise<CheckSocialsResponse> {
   try {
+    options.signal?.throwIfAborted();
     const { name, platforms } = checkSocialsSchema.parse(input);
 
     // Default platforms: mix of social and developer platforms
@@ -446,7 +458,9 @@ export async function executeCheckSocials(
 
     // Check all platforms in parallel (max 5 concurrent)
     const results = await Promise.all(
-      platformsToCheck.map((p) => checkPlatform(normalizedName, p)),
+      platformsToCheck.map((p) =>
+        checkPlatform(normalizedName, p, options.signal),
+      ),
     );
 
     // Categorize results by confidence
@@ -518,6 +532,9 @@ export async function executeCheckSocials(
       insights,
     };
   } catch (error) {
+    if (options.signal?.aborted) {
+      options.signal.throwIfAborted();
+    }
     throw wrapError(error);
   }
 }

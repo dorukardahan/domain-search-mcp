@@ -9,6 +9,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 - -
 
+## [1.13.1] - 2026-07-29
+### Fixed
+- Programmatic social-clearance requests now accept and forward an abort signal so callers can cancel in-flight provider checks.
+
 ## [1.13.0] - 2026-07-28
 ### Added
 - A provider-neutral domain-clearance observation contract and conservative resolver for programmatic consumers.

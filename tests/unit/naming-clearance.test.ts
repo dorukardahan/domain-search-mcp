@@ -36,6 +36,51 @@ describe('clearName', () => {
     expect(r.domains).toEqual([{ domain: 'corda.com', available: null, price_first_year: null }]);
     expect(r.verdict).toBe('unknown');
   });
+  it('rejects promptly with the caller abort reason while a domain source is still pending', async () => {
+    let socialSignal: AbortSignal | undefined;
+    (searchDomain as jest.Mock).mockImplementationOnce(
+      () => new Promise(() => undefined),
+    );
+    (executeCheckSocials as jest.Mock).mockImplementationOnce(
+      (
+        _input: unknown,
+        options: { signal?: AbortSignal },
+      ) => {
+        socialSignal = options.signal;
+        return new Promise((_resolve, reject) => {
+          if (options.signal?.aborted) {
+            reject(options.signal.reason);
+            return;
+          }
+          options.signal?.addEventListener(
+            'abort',
+            () => reject(options.signal?.reason),
+            { once: true },
+          );
+        });
+      },
+    );
+    const controller = new AbortController();
+    const reason = new Error('synthetic clearance abort');
+    const operation = clearName(
+      'corda',
+      { tlds: ['com'], platforms: ['github'] },
+      { signal: controller.signal },
+    );
+    await Promise.resolve();
+
+    expect(socialSignal).toBe(controller.signal);
+    controller.abort(reason);
+    const settled = await Promise.race([
+      operation.then(
+        () => 'resolved',
+        (error: unknown) => error,
+      ),
+      new Promise((resolve) => setTimeout(() => resolve('timed out'), 100)),
+    ]);
+
+    expect(settled).toBe(reason);
+  });
   it('rejected domain source + fully-available socials => partial, never cleared', async () => {
     (searchDomain as jest.Mock).mockRejectedValueOnce(new Error('rdap down'));
     (executeCheckSocials as jest.Mock).mockResolvedValueOnce({
@@ -111,6 +156,7 @@ describe('clearName', () => {
   it('suppresses nested source logs when explicitly requested', async () => {
     const stderr = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const protectedCache = new TtlCache<string>(60);
+    const controller = new AbortController();
     (searchDomain as jest.Mock).mockImplementationOnce(async (name: string, tlds: string[]) => {
       logger.error('domain source protected trace', { domain: `${name}.${tlds[0]}` });
       protectedCache.set(`domain:${name}.${tlds[0]}`, 'secret');
@@ -134,7 +180,7 @@ describe('clearName', () => {
       const report = await clearName(
         'protected-product-name',
         { tlds: ['com'], platforms: ['github'] },
-        { logPolicy: 'suppress' },
+        { logPolicy: 'suppress', signal: controller.signal },
       );
 
       expect(report.verdict).toBe('cleared');
@@ -143,6 +189,10 @@ describe('clearName', () => {
         ['com'],
         undefined,
         { reportTaken: false },
+      );
+      expect(executeCheckSocials).toHaveBeenLastCalledWith(
+        { name: 'protected-product-name', platforms: ['github'] },
+        { signal: controller.signal },
       );
       expect(protectedCache.size).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
