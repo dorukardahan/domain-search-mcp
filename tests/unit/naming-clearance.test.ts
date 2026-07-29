@@ -36,6 +36,51 @@ describe('clearName', () => {
     expect(r.domains).toEqual([{ domain: 'corda.com', available: null, price_first_year: null }]);
     expect(r.verdict).toBe('unknown');
   });
+  it('rejects promptly with the caller abort reason while a domain source is still pending', async () => {
+    let socialSignal: AbortSignal | undefined;
+    (searchDomain as jest.Mock).mockImplementationOnce(
+      () => new Promise(() => undefined),
+    );
+    (executeCheckSocials as jest.Mock).mockImplementationOnce(
+      (
+        _input: unknown,
+        options: { signal?: AbortSignal },
+      ) => {
+        socialSignal = options.signal;
+        return new Promise((_resolve, reject) => {
+          if (options.signal?.aborted) {
+            reject(options.signal.reason);
+            return;
+          }
+          options.signal?.addEventListener(
+            'abort',
+            () => reject(options.signal?.reason),
+            { once: true },
+          );
+        });
+      },
+    );
+    const controller = new AbortController();
+    const reason = new Error('synthetic clearance abort');
+    const operation = clearName(
+      'corda',
+      { tlds: ['com'], platforms: ['github'] },
+      { signal: controller.signal },
+    );
+    await Promise.resolve();
+
+    expect(socialSignal).toBe(controller.signal);
+    controller.abort(reason);
+    const settled = await Promise.race([
+      operation.then(
+        () => 'resolved',
+        (error: unknown) => error,
+      ),
+      new Promise((resolve) => setTimeout(() => resolve('timed out'), 100)),
+    ]);
+
+    expect(settled).toBe(reason);
+  });
   it('rejected domain source + fully-available socials => partial, never cleared', async () => {
     (searchDomain as jest.Mock).mockRejectedValueOnce(new Error('rdap down'));
     (executeCheckSocials as jest.Mock).mockResolvedValueOnce({

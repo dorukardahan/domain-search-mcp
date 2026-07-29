@@ -532,6 +532,9 @@ export async function executeCheckSocials(
       insights,
     };
   } catch (error) {
+    if (options.signal?.aborted) {
+      options.signal.throwIfAborted();
+    }
     throw wrapError(error);
   }
 }

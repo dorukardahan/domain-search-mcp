@@ -40,7 +40,12 @@ async function runClearance(
       ? executeCheckSocials(
           { name, platforms: targets.platforms as never },
           { signal },
-        ).catch((e) => { failed = true; logger.warn('clearance: socials check failed', { error: String(e) }); return null; })
+        ).catch((e) => {
+          if (signal?.aborted) signal.throwIfAborted();
+          failed = true;
+          logger.warn('clearance: socials check failed', { error: String(e) });
+          return null;
+        })
       : Promise.resolve(null),
   ]);
 

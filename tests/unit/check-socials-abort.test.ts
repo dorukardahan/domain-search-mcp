@@ -35,8 +35,23 @@ describe('check_socials cancellation', () => {
     await Promise.resolve();
 
     expect(requestSignal).toBe(controller.signal);
-    controller.abort(new Error('synthetic caller abort'));
+    const reason = new Error('synthetic caller abort');
+    controller.abort(reason);
 
-    await expect(operation).rejects.toBeDefined();
+    await expect(operation).rejects.toBe(reason);
+  });
+
+  it('preserves the reason from a signal aborted before execution', async () => {
+    const controller = new AbortController();
+    const reason = new Error('synthetic pre-abort');
+    controller.abort(reason);
+
+    await expect(
+      executeCheckSocials(
+        { name: 'syntheticpreabort', platforms: ['github'] },
+        { signal: controller.signal },
+      ),
+    ).rejects.toBe(reason);
+    expect(mockedAxios).not.toHaveBeenCalled();
   });
 });
