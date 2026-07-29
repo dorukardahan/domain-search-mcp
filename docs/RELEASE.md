@@ -20,8 +20,8 @@ After the release commit is present on `main`, create and push the matching tag:
 ```bash
 git switch main
 git pull --ff-only
-git tag v1.13.0
-git push origin v1.13.0
+git tag v1.13.1
+git push origin v1.13.1
 ```
 
 The release workflow uses npm trusted publishing through GitHub OIDC. It does

@@ -7,6 +7,8 @@ export const CLEARANCE_LOG_POLICY_VERSION = 1 as const;
 export interface ClearanceTargets { tlds?: string[]; platforms?: string[]; }
 export type ClearanceOptions = Readonly<{
   logPolicy?: 'default' | 'suppress';
+  /** Cancels in-flight social-provider requests. */
+  signal?: AbortSignal;
 }>;
 export interface ClearanceReport {
   name: string;
@@ -19,6 +21,7 @@ async function runClearance(
   name: string,
   targets: ClearanceTargets,
   reportTaken: boolean = true,
+  signal?: AbortSignal,
 ): Promise<ClearanceReport> {
   const wantDomains = !!targets.tlds?.length;
   const wantSocials = !!targets.platforms?.length;
@@ -34,7 +37,10 @@ async function runClearance(
         ).catch((e) => { failed = true; logger.warn('clearance: domain check failed', { error: String(e) }); return null; })
       : Promise.resolve(null),
     wantSocials
-      ? executeCheckSocials({ name, platforms: targets.platforms as never }).catch((e) => { failed = true; logger.warn('clearance: socials check failed', { error: String(e) }); return null; })
+      ? executeCheckSocials(
+          { name, platforms: targets.platforms as never },
+          { signal },
+        ).catch((e) => { failed = true; logger.warn('clearance: socials check failed', { error: String(e) }); return null; })
       : Promise.resolve(null),
   ]);
 
@@ -95,7 +101,13 @@ export async function clearName(
   options: ClearanceOptions = {},
 ): Promise<ClearanceReport> {
   const suppressProtectedOutput = options.logPolicy === 'suppress';
-  const operation = () => runClearance(name, targets, !suppressProtectedOutput);
+  const operation = () =>
+    runClearance(
+      name,
+      targets,
+      !suppressProtectedOutput,
+      options.signal,
+    );
   return suppressProtectedOutput
     ? withLoggerSuppressed(() => withCacheSuppressed(operation))
     : operation();

@@ -111,6 +111,7 @@ describe('clearName', () => {
   it('suppresses nested source logs when explicitly requested', async () => {
     const stderr = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const protectedCache = new TtlCache<string>(60);
+    const controller = new AbortController();
     (searchDomain as jest.Mock).mockImplementationOnce(async (name: string, tlds: string[]) => {
       logger.error('domain source protected trace', { domain: `${name}.${tlds[0]}` });
       protectedCache.set(`domain:${name}.${tlds[0]}`, 'secret');
@@ -134,7 +135,7 @@ describe('clearName', () => {
       const report = await clearName(
         'protected-product-name',
         { tlds: ['com'], platforms: ['github'] },
-        { logPolicy: 'suppress' },
+        { logPolicy: 'suppress', signal: controller.signal },
       );
 
       expect(report.verdict).toBe('cleared');
@@ -143,6 +144,10 @@ describe('clearName', () => {
         ['com'],
         undefined,
         { reportTaken: false },
+      );
+      expect(executeCheckSocials).toHaveBeenLastCalledWith(
+        { name: 'protected-product-name', platforms: ['github'] },
+        { signal: controller.signal },
       );
       expect(protectedCache.size).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
