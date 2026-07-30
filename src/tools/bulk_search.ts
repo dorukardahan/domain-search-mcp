@@ -100,8 +100,11 @@ export async function executeBulkSearch(
 
     const results = await bulkSearchDomains(domains, tld, registrar);
 
-    const available = results.filter((r) => r.available);
-    const taken = results.filter((r) => !r.available);
+    // Errored checks carry `error` and must not be counted as "taken" — a
+    // failed lookup is unknown, not registered.
+    const errored = results.filter((r) => r.error);
+    const available = results.filter((r) => !r.error && r.available);
+    const taken = results.filter((r) => !r.error && !r.available);
 
     const insights: string[] = [];
 
@@ -126,10 +129,22 @@ export async function executeBulkSearch(
           );
         }
       }
-    } else {
-      insights.push(`❌ All ${domains.length} domains are taken`);
+    } else if (taken.length > 0) {
+      // Report only the count actually confirmed taken — errored checks are
+      // unknown, not registered, and must not be folded into this message.
+      const scope =
+        taken.length === domains.length
+          ? `All ${domains.length}`
+          : `${taken.length} of ${domains.length}`;
+      insights.push(`❌ ${scope} domains are taken`);
+      insights.push('💡 Try different variations or alternative TLDs');
+    }
+
+    if (errored.length > 0) {
       insights.push(
-        '💡 Try different variations or alternative TLDs',
+        `⚠️ ${errored.length} domain(s) could not be checked (rate limit or timeout) — re-run to retry: ${errored
+          .map((r) => r.domain)
+          .join(', ')}`,
       );
     }
 
@@ -143,7 +158,7 @@ export async function executeBulkSearch(
         total: domains.length,
         available: available.length,
         taken: taken.length,
-        errors: domains.length - results.length,
+        errors: errored.length,
       },
       insights,
     };

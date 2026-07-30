@@ -106,7 +106,7 @@ function formatDomainResultsTable(results: DomainResult[]): string {
   const headers = ['Domain', 'Status', 'Price', 'Pricing', 'Registrar', 'Links'];
   const rows = results.map((result) => [
     result.domain,
-    result.available ? 'Available' : 'Taken',
+    result.error ? 'Error' : result.available ? 'Available' : 'Taken',
     formatPriceSummary(result),
     formatPricingLabel(result),
     result.registrar || 'unknown',

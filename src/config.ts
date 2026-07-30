@@ -216,6 +216,7 @@ export function loadConfig(): Config {
       redisUrl: env.REDIS_URL, // Optional: redis://[:password@]host:port
     },
     rateLimitPerMinute: parseIntWithDefault(env.RATE_LIMIT_PER_MINUTE, 60),
+    bulkConcurrency: parseIntWithDefault(env.BULK_CONCURRENCY, 5),
     allowedTlds: parseList(env.ALLOWED_TLDS, [
       'com',
       'io',

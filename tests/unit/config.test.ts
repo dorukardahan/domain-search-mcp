@@ -150,3 +150,23 @@ describe('getAvailableSources - qwen_inference listing', () => {
     expect(getAvailableSources()).toContain('qwen_inference');
   });
 });
+
+describe('loadConfig - bulk concurrency', () => {
+  const KEY = 'BULK_CONCURRENCY';
+  const original = process.env[KEY];
+
+  afterEach(() => {
+    if (original === undefined) delete process.env[KEY];
+    else process.env[KEY] = original;
+  });
+
+  it('defaults to a conservative concurrency when unset', () => {
+    delete process.env[KEY];
+    expect(loadConfig().bulkConcurrency).toBe(5);
+  });
+
+  it('honours a BULK_CONCURRENCY override', () => {
+    process.env[KEY] = '12';
+    expect(loadConfig().bulkConcurrency).toBe(12);
+  });
+});
