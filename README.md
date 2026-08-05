@@ -1,5 +1,7 @@
 # Domain Search MCP
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.dorukardahan%2Fdomain-search-mcp.svg)](https://mcptoplist.com/server/io.github.dorukardahan%2Fdomain-search-mcp)
+
 [![npm](https://img.shields.io/npm/v/domain-search-mcp?label=npm)](https://www.npmjs.com/package/domain-search-mcp)
 [![downloads](https://img.shields.io/npm/dm/domain-search-mcp?label=downloads)](https://www.npmjs.com/package/domain-search-mcp)
 [![license](https://img.shields.io/npm/l/domain-search-mcp)](LICENSE)
