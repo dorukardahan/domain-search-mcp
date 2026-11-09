@@ -56,7 +56,10 @@ def main():
         if run(['git','status','--porcelain','--untracked-files=all'],ROOT).strip(): raise Blocked('Source checkout not clean')
         commit=run(['git','rev-parse','HEAD'],ROOT).decode().strip()
         remote=run(['git','remote','get-url','origin'],ROOT).decode().strip()
-        if remote not in [f'https://github.com/{policy["repository"]}.git',f'git@github.com:{policy["repository"]}.git',f'https://github.com/{policy["repository"]}']: raise Blocked('Unexpected origin')
+        https_origins = [f'https://github.com/{policy["repository"]}.git', f'https://github.com/{policy["repository"]}']
+        ssh_user, separator, ssh_host_path = remote.partition('@')
+        valid_ssh = separator and ssh_user == 'git' and ssh_host_path == f'github.com:{policy["repository"]}.git'
+        if remote not in https_origins and not valid_ssh: raise Blocked('Unexpected origin')
         if out.exists() and any(out.iterdir()): raise Blocked('Artifact directory must be empty')
         out.mkdir(parents=True,exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='release-checkout-') as tmp:

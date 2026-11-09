@@ -9,7 +9,7 @@ regex = '''(?i)(?:password|passwd|parola|şifre|sifre)(?:[ \t]*(?:is|was|idi|old
 secretGroup = 1
 [[rules.allowlists]]
 regexTarget = "secret"
-regexes = ['''(?i)^(?:redacted|masked|example|changeme|placeholder|null|undefined|process[.]env|os[.]environ|your[_-]|secret[_-]?ref|secrets[.]|refs[.]|test[_-]|fake[_-])''']
+regexes = ['''(?i)^(?:redacted|masked|example|changeme|placeholder|null|undefined|process[.]env|os[.]environ|your[_-]|secret[_-]?ref|secrets[.]|refs[.])''']
 
 [[rules]]
 id = "contextual-wallet-private-key"

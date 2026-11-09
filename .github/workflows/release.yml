@@ -29,6 +29,7 @@ jobs:
           npm ci --include=dev --ignore-scripts
           npm run build
           npm test -- --runInBand
+          python3 scripts/security/test_guards.py
           python3 scripts/security/release.py prepare --package domain-search-mcp --output "$RUNNER_TEMP/checked-package"
           cat "$RUNNER_TEMP/checked-package/manifest.json" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
@@ -50,12 +51,6 @@ jobs:
           # npm >= 11.5.1 required for trusted publishing (OIDC); node 24 bundles it
           node-version: 24
           registry-url: https://registry.npmjs.org
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Build
-        run: npm run build
 
       # Auth via npm Trusted Publishing (GitHub OIDC) - no NPM_TOKEN secret.
       # Publisher configured on npmjs.com: repo dorukardahan/domain-search-mcp, workflow release.yml.
