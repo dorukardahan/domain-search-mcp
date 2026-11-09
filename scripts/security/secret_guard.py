@@ -26,6 +26,7 @@ def scan(folder):
         report=pathlib.Path(tmp)/'redacted.json'
         p=subprocess.run([scanner(),'dir',str(folder),'--config',str(HERE/'gitleaks.toml'),
             '--redact=100','--no-banner','--no-color','--ignore-gitleaks-allow','--max-target-megabytes','0',
+            '--gitleaks-ignore-path',str(pathlib.Path(tmp)/'no-repo-suppressions'),
             '--report-format','json','--report-path',str(report),'--exit-code','23'],
             stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         if p.returncode not in (0,23): raise Blocked('Secret scan failed; not a clean result')

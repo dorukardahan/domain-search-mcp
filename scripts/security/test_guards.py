@@ -1,6 +1,6 @@
 import contextlib, io, json, os, pathlib, subprocess, tarfile, tempfile, unittest
 from secret_guard import Blocked, checked_write, scan, snapshot_index
-from release import validate_names, extract, ci_authorized
+from release import validate_names, extract, ci_authorized, verify_npm_artifact, digest
 class GuardTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.tmp.name)
@@ -63,6 +63,15 @@ class GuardTests(unittest.TestCase):
             with self.assertRaises(Blocked):ci_authorized({'repository':'example/project','automatic':False})
         finally:
             if old is not None:os.environ['GITHUB_ACTIONS']=old
+    def test_artifact_tampering_rejected_before_any_upload(self):
+        artifact=self.root/'package.tgz';artifact.write_bytes(b'original synthetic artifact')
+        manifest={'artifact':artifact.name,'sha256':digest(artifact)}
+        artifact.write_bytes(b'tampered synthetic artifact')
+        with self.assertRaises(Blocked):verify_npm_artifact(self.root,manifest,{'files':[]},'example-package')
+    def test_repo_ignore_cannot_hide_secret(self):
+        (self.root/'.gitignore').write_text('note.md\n')
+        (self.root/'note.md').write_text('password: '+'Synthetic'+'Only784!')
+        with contextlib.redirect_stdout(io.StringIO()),self.assertRaises(Blocked):scan(self.root)
     def test_missing_scanner_fails_closed(self):
         old=os.environ.get('GITLEAKS_BIN');os.environ['GITLEAKS_BIN']='/nonexistent/scanner'
         try:

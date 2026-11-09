@@ -29,6 +29,16 @@ def extract(tarball, target):
         if len(names)!=len(set(names)): raise Blocked('Duplicate package member')
     return sorted(names)
 
+def verify_npm_artifact(out, manifest, policy, package_name):
+    artifact=out/manifest['artifact']
+    if artifact.parent!=out or digest(artifact)!=manifest['sha256']:raise Blocked('Artifact changed after review')
+    with tempfile.TemporaryDirectory(prefix='verify-package-') as tmp:
+        dest=pathlib.Path(tmp)
+        validate_names(extract(artifact,dest),policy['files']);scan(dest)
+        meta=json.loads((dest/'package.json').read_text())
+        if meta['name']!=package_name or meta['version']!=manifest['version']:raise Blocked('Package metadata mismatch')
+    return artifact
+
 def ci_authorized(policy):
     if os.environ.get('GITHUB_ACTIONS')!='true' or os.environ.get('GITHUB_REPOSITORY')!=policy['repository']:
         raise Blocked('Uploads only through the configured CI; local mode is prepare-only')
@@ -90,13 +100,7 @@ def main():
         if manifest['commit']!=run(['git','rev-parse','HEAD'],ROOT).decode().strip():raise Blocked('Artifact commit mismatch')
         validate_names(manifest['files'],policy['files'])
         if policy['registry']=='npm':
-            artifact=out/manifest['artifact']
-            if artifact.parent!=out or digest(artifact)!=manifest['sha256']:raise Blocked('Artifact changed after review')
-            with tempfile.TemporaryDirectory(prefix='verify-package-') as tmp:
-                dest=pathlib.Path(tmp)
-                validate_names(extract(artifact,dest),policy['files']);scan(dest)
-                meta=json.loads((dest/'package.json').read_text())
-                if meta['name']!=a.package or meta['version']!=manifest['version']:raise Blocked('Package metadata mismatch')
+            artifact=verify_npm_artifact(out,manifest,policy,a.package)
             run(['npm','publish',str(artifact),'--ignore-scripts','--provenance','--access','public'],ROOT)
         else:
             if not a.clawhub_root:raise Blocked('Reviewed ClawHub CLI root required')
