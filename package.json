@@ -2,7 +2,7 @@
   "name": "domain-search-mcp",
   "version": "1.13.1",
   "mcpName": "io.github.dorukardahan/domain-search-mcp",
-  "description": "Zero-config domain availability MCP for Claude & ChatGPT. AI-powered suggestions via Qwen 7B. RDAP → GoDaddy → WHOIS fallback chain with premium/auction detection. Stdio + HTTP transports.",
+  "description": "Zero-config domain availability MCP for Claude & ChatGPT. AI-powered suggestions via Qwen 7B. RDAP \u2192 GoDaddy \u2192 WHOIS fallback chain with premium/auction detection. Stdio + HTTP transports.",
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
   "exports": {
@@ -84,5 +84,16 @@
     "ts-jest": "^29.1.0",
     "tsx": "^4.6.0",
     "typescript": "^5.3.0"
-  }
+  },
+  "files": [
+    "dist/",
+    "bin/",
+    "data/common-words.json",
+    "data/english-words.json",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "server.json",
+    "chatgpt-manifest.json"
+  ]
 }

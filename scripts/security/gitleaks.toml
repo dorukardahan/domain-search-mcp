@@ -1,0 +1,30 @@
+title = "Release and persistence secret guard"
+[extend]
+useDefault = true
+
+[[rules]]
+id = "contextual-plaintext-password"
+description = "Plaintext password including temporary credentials"
+regex = '''(?i)(?:password|passwd|parola|şifre|sifre)(?:[ \t]*(?:is|was|idi|oldu))?[ \t]*[:=][ \t]*["'`]?([A-Za-z0-9!@#$%^&*()_+./=-]{8,})'''
+secretGroup = 1
+[[rules.allowlists]]
+regexTarget = "secret"
+regexes = ['''(?i)^(?:redacted|masked|example|changeme|placeholder|null|undefined|process[.]env|os[.]environ|your[_-]|secret[_-]?ref|secrets[.]|refs[.]|test[_-]|fake[_-])''']
+
+[[rules]]
+id = "contextual-wallet-private-key"
+description = "Wallet private key in notes or assignments"
+regex = '''(?i)(?:private[ _-]?key|özel[ _-]?anahtar|ozel[ _-]?anahtar)[ \t]*[:=][ \t]*["'`]?(?:0x)?([a-f0-9]{64})'''
+secretGroup = 1
+
+[[rules]]
+id = "contextual-wallet-seed"
+description = "Seed or recovery phrase in plaintext"
+regex = '''(?i)(?:seed(?:[ _-]?phrase)?|recovery[ _-]?phrase|kurtarma[ _-]?(?:ifadesi|kelimeleri))[ \t]*[:=][ \t]*["'`]?((?:[a-z]{3,12}[ \t]+){11,23}[a-z]{3,12})'''
+secretGroup = 1
+
+[[rules]]
+id = "quoted-password-in-prose"
+description = "Quoted password in prose, including Turkish"
+regex = '''(?i)(?:password|parola|şifre|sifre)(?:si)?[ \t]+(?:is[ \t]+|was[ \t]+)?["'`]([A-Za-z0-9!@#$%^&*()_+./=-]{8,})["'`]'''
+secretGroup = 1

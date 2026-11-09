@@ -51,3 +51,5 @@ training/rlhf/model_responses.jsonl
 training/rlhf/preference_pairs.jsonl
 .openrouter_key
 training/.openrouter_key
+
+__pycache__/

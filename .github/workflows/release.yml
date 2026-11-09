@@ -11,8 +11,35 @@ permissions:
   id-token: write
 
 jobs:
-  publish:
+  preflight:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install pinned scanner
+        run: |
+          bash scripts/security/install-gitleaks.sh "$RUNNER_TEMP/guard-bin"
+          echo "$RUNNER_TEMP/guard-bin" >> "$GITHUB_PATH"
+      - name: Test, prepare and scan before approval
+        run: |
+          npm ci --include=dev --ignore-scripts
+          npm run build
+          npm test -- --runInBand
+          python3 scripts/security/release.py prepare --package domain-search-mcp --output "$RUNNER_TEMP/checked-package"
+          cat "$RUNNER_TEMP/checked-package/manifest.json" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: checked-package
+          path: ${{ runner.temp }}/checked-package/
+          retention-days: 7
+  publish:
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: owner-approved-release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,8 +59,20 @@ jobs:
 
       # Auth via npm Trusted Publishing (GitHub OIDC) - no NPM_TOKEN secret.
       # Publisher configured on npmjs.com: repo dorukardahan/domain-search-mcp, workflow release.yml.
-      - name: Publish (provenance)
-        run: npm publish --provenance
+      - name: Install pinned secret scanner
+        run: |
+          bash scripts/security/install-gitleaks.sh "$RUNNER_TEMP/guard-bin"
+          echo "$RUNNER_TEMP/guard-bin" >> "$GITHUB_PATH"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: checked-package
+          path: ${{ runner.temp }}/checked-package
+
+      - name: Publish checked artifact after owner approval
+        env:
+          RELEASE_APPROVED_ENVIRONMENT: owner-approved-release
+        run: python3 scripts/security/release.py publish --package domain-search-mcp --output "$RUNNER_TEMP/checked-package"
 
       # Keeps the MCP registry listing in sync with the npm release.
       # Non-blocking: the registry is in preview and must not fail the npm release.
