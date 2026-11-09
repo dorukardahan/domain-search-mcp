@@ -79,7 +79,7 @@ def main():
                 scan(staged)
                 payload={'hashes':{name:digest(staged/name) for name in names}}
                 import re
-                version=re.search(r'^version:\s*[\'"]?([0-9]+\.[0-9]+\.[0-9]+)',(staged/'SKILL.md').read_text(),re.M).group(1)
+                version=re.search(r'^\s*version:\s*[\'"]?([0-9]+\.[0-9]+\.[0-9]+)',(staged/'SKILL.md').read_text(),re.M).group(1)
             manifest={'package':a.package,'registry':policy['registry'],'version':version,'repository':policy['repository'],'commit':commit,'files':names,**payload}
             (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
             print(json.dumps(manifest,indent=2))

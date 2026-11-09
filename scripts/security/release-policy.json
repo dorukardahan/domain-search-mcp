@@ -277,8 +277,26 @@
       "dist/utils/version.d.ts.map",
       "dist/utils/version.js",
       "dist/utils/version.js.map",
+      "docs/API.md",
+      "docs/ARCHITECTURE.md",
+      "docs/CONFIGURATION.md",
+      "docs/MULTI_PLATFORM_EXPANSION.md",
+      "docs/RELEASE.md",
+      "docs/WORKFLOWS.md",
+      "docs/marketing/devto-post.md",
+      "docs/marketing/hackernews.md",
+      "docs/marketing/producthunt.md",
+      "docs/marketing/reddit-post.md",
+      "docs/marketing/twitter-thread.md",
+      "examples/bulk-search-50-domains.ts",
+      "examples/cli-interactive.ts",
+      "examples/compare-registrars.ts",
+      "examples/search-single-domain.ts",
+      "examples/suggest-names.ts",
+      "glama.json",
       "package.json",
-      "server.json"
+      "server.json",
+      "smithery.yaml"
     ]
   }
 }

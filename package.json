@@ -94,6 +94,10 @@
     "CHANGELOG.md",
     "LICENSE",
     "server.json",
-    "chatgpt-manifest.json"
+    "chatgpt-manifest.json",
+    "docs/",
+    "examples/",
+    "glama.json",
+    "smithery.yaml"
   ]
 }
