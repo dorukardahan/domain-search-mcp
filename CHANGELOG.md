@@ -6,8 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-### Added
-- -
+### Changed
+- **Node.js 20 or newer is now required** (was 18; Node.js 18 reached end of life in April 2025). The MCP SDK lines that fix the advisories below depend on `@hono/node-server` 2.x, which requires Node.js 20.
+- The MCP SDK moves from the `~1.29.0` line to `~1.32.2`.
+
+### Security
+- MCP SDK 1.32.2 fixes:
+  - GHSA-f897-62hf-6gxq: no request body or batch size limit on HTTP transports.
+  - GHSA-46jr-4wx8-v453: memory exhaustion during validation.
+  - GHSA-22jm-h49p-29qw: tasks not tied to their session.
+  - GHSA-6qxp-vccf-f47h: OAuth credentials sent to a server-chosen authorization server.
+  - GHSA-rvq5-wwqv-78pq: bearer tokens accepted for another service.
+  - GHSA-6prh-2h8m-c8cw: credentials re-sent across cross-origin redirects.
+
+  The 1.29 line has no fixes for these. Because the dependency was pinned with `~`, every install of 1.13.x received the vulnerable SDK.
+- Updated the locked dependency trees:
+  - root: `axios` 1.21.0, `proxy-addr` 2.0.8, `follow-redirects` 1.16.2, `body-parser` 2.4.0, `fast-uri`, `ip-address`;
+  - `cache-backend/`: `fastify` 5.12.8, `find-my-way` 9.10.0, `fast-uri` 3.1.9.
+- Known remaining: `zod` < 4.6.6 (GHSA-mrhx-c7xc-m3w5, memory use when validating oversized collections). The fix needs zod 4 and `@asteasolutions/zod-to-openapi` 9, a separate migration. The SDK's new HTTP body size limit reduces the input size an attacker can send.
 
 ## [1.13.1] - 2026-07-29
 ### Fixed

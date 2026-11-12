@@ -67,7 +67,7 @@ describe('npm pack invariants (93MB dataset near-miss guard)', () => {
 });
 
 describe('runtime compatibility invariants', () => {
-  it('keeps the MCP SDK on the Node 18-compatible v1.29 line', () => {
+  it('keeps the MCP SDK on the patched v1.32 line and requires Node 20', () => {
     const packageJson = JSON.parse(
       readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'),
     ) as {
@@ -75,9 +75,9 @@ describe('runtime compatibility invariants', () => {
       dependencies: Record<string, string>;
     };
 
-    expect(packageJson.engines.node).toBe('>=18.0.0');
+    expect(packageJson.engines.node).toBe('>=20.0.0');
     expect(packageJson.dependencies['@modelcontextprotocol/sdk']).toBe(
-      '~1.29.0',
+      '~1.32.2',
     );
   });
 });
