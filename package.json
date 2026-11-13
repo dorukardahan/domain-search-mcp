@@ -1,8 +1,8 @@
 {
   "name": "domain-search-mcp",
-  "version": "1.13.1",
+  "version": "1.14.0",
   "mcpName": "io.github.dorukardahan/domain-search-mcp",
-  "description": "Zero-config domain availability MCP for Claude & ChatGPT. AI-powered suggestions via Qwen 7B. RDAP \u2192 GoDaddy \u2192 WHOIS fallback chain with premium/auction detection. Stdio + HTTP transports.",
+  "description": "Zero-config domain availability MCP for Claude & ChatGPT. AI-powered suggestions via Qwen 7B. RDAP → GoDaddy → WHOIS fallback chain with premium/auction detection. Stdio + HTTP transports.",
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
   "exports": {

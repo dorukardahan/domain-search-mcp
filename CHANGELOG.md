@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.14.0] - 2026-11-13
 ### Changed
 - **Node.js 20 or newer is now required** (was 18; Node.js 18 reached end of life in April 2025). The MCP SDK lines that fix the advisories below depend on `@hono/node-server` 2.x, which requires Node.js 20.
 - The MCP SDK moves from the `~1.29.0` line to `~1.32.2`.
