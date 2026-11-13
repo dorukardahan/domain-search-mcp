@@ -62,11 +62,11 @@
   },
   "homepage": "https://github.com/dorukardahan/domain-search-mcp#readme",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^7.3.4",
-    "@modelcontextprotocol/sdk": "~1.29.0",
+    "@modelcontextprotocol/sdk": "~1.32.2",
     "axios": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.0",
